@@ -48,7 +48,8 @@ function parseBool(v: unknown): boolean | null {
   return null
 }
 
-function parseQuestion(raw: Raw, n: number): Question {
+/** Valida y normaliza una pregunta; `n` es su número (desde 1) para los mensajes de error. */
+export function parseQuestion(raw: Raw, n: number, id = n - 1): Question {
   const where = `Pregunta ${n}`
   const consigna = str(raw.consigna ?? raw.pregunta ?? raw.enunciado)
   if (!consigna) throw new Error(`${where}: falta "consigna"`)
@@ -76,20 +77,20 @@ function parseQuestion(raw: Raw, n: number): Question {
     if (tipo === 'multiple_choice' && correctas.length > 1) {
       throw new Error(`${where}: "multiple_choice" admite una sola correcta; usá "seleccion_multiple"`)
     }
-    return { tipo, consigna, opciones, correctas, explicacion }
+    return { id, tipo, consigna, opciones, correctas, explicacion }
   }
 
   if (tipo === 'verdadero_falso') {
     const respuesta = parseBool(raw.respuesta ?? raw.correcta ?? raw.respuestas)
     if (respuesta === null) throw new Error(`${where}: "respuesta" debe ser true o false`)
-    return { tipo, consigna, respuesta, explicacion }
+    return { id, tipo, consigna, respuesta, explicacion }
   }
 
   const rawAnswers = raw.respuestas ?? raw.respuesta ?? raw.correctas
   if (tipo === 'texto') {
     const respuestas = strList(rawAnswers)
     if (!respuestas.length) throw new Error(`${where}: falta "respuestas"`)
-    return { tipo, consigna, respuestas, explicacion }
+    return { id, tipo, consigna, respuestas, explicacion }
   }
 
   // completar
@@ -106,7 +107,7 @@ function parseQuestion(raw: Raw, n: number): Question {
   if (respuestas.length !== count || respuestas.some((r) => !r.length)) {
     throw new Error(`${where}: hay ${count} hueco(s) "___" pero ${respuestas.length} grupo(s) de respuestas`)
   }
-  return { tipo, consigna: text, respuestas, explicacion }
+  return { id, tipo, consigna: text, respuestas, explicacion }
 }
 
 export function parseTestJson(source: string): ParsedTest {

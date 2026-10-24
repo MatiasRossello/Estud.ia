@@ -20,10 +20,22 @@ export const api = {
     rpc<string>('create_test', { p_owner: owner(), p_title: title, p_description: description, p_questions: questions }),
   myTests: () => rpc<OwnTest[]>('list_my_tests', { p_owner: owner() }),
   publicTests: () => rpc<PublicTest[]>('list_public_tests'),
-  async getTest(id: string) {
-    const rows = await rpc<FullTest[]>('get_test', { p_test: id, p_owner: owner() })
-    return rows[0] ?? null
+  async getTest(id: string): Promise<FullTest | null> {
+    const rows = await rpc<Omit<FullTest, 'byId'>[]>('get_test', { p_test: id, p_owner: owner() })
+    const row = rows[0]
+    if (!row) return null
+    // Los tests subidos antes de los ids usan su posición, que coincide con el historial guardado.
+    const questions = row.questions.map((q, i) => ({ ...q, id: q.id ?? i }))
+    return { ...row, questions, byId: new Map(questions.map((q) => [q.id, q])) }
   },
+  updateTest: (id: string, title: string, description: string, questions: Question[] | null) =>
+    rpc<void>('update_test', {
+      p_owner: owner(),
+      p_test: id,
+      p_title: title,
+      p_description: description,
+      p_questions: questions,
+    }),
   setPublic: (id: string, isPublic: boolean) =>
     rpc<void>('set_test_public', { p_owner: owner(), p_test: id, p_public: isPublic }),
   deleteTest: (id: string) => rpc<void>('delete_test', { p_owner: owner(), p_test: id }),

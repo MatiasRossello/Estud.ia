@@ -148,7 +148,7 @@ export default function Results({ test, session, onRetryWrong, onBack }: Props) 
           <ul className="review-list">
             {lastRound.qids.map((id) => {
               const a = lastRound.answers[id]
-              const q = test.questions[id]
+              const q = test.byId.get(id)!
               return (
                 <li key={id}>
                   <span className={`mark ${a?.correct ? 'ok' : 'no'}`} aria-hidden="true">{a?.correct ? '✓' : '✗'}</span>

@@ -42,7 +42,7 @@ export default function Player({ test, session, onRoundEnd, onExit }: Props) {
   const pos = round.qids.findIndex((id) => !(id in round.answers))
   const [shownPos, setShownPos] = useState(pos)
   const qid = round.qids[shownPos]
-  const q = test.questions[qid]
+  const q = test.byId.get(qid)!
   const record = round.answers[qid] as AnswerRecord | undefined
   const optionOrder = round.optionOrders[qid]
 

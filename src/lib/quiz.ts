@@ -28,11 +28,11 @@ export function computePoints(score: number, timeMs: number, tipo: QuestionType)
   return Math.round(score * MAX_POINTS * (1 - ratio / 2))
 }
 
-export function newRound(qids: number[], questions: Question[]): Round {
+export function newRound(qids: number[], byId: Map<number, Question>): Round {
   const order = shuffle(qids)
   const optionOrders: Record<number, number[]> = {}
   for (const id of order) {
-    const q = questions[id]
+    const q = byId.get(id)!
     if (q.tipo === 'multiple_choice' || q.tipo === 'seleccion_multiple') {
       optionOrders[id] = shuffle(q.opciones.map((_, i) => i))
     }
@@ -41,7 +41,7 @@ export function newRound(qids: number[], questions: Question[]): Round {
 }
 
 export function newSession(
-  test: { id: string; title: string; question_count: number; questions: Question[] },
+  test: { id: string; title: string; question_count: number; byId: Map<number, Question> },
   mode: SessionMode,
   qids: number[],
 ): Session {
@@ -52,13 +52,31 @@ export function newSession(
     mode,
     bankSize: test.question_count,
     qids,
-    rounds: [newRound(qids, test.questions)],
+    rounds: [newRound(qids, test.byId)],
     createdAt: Date.now(),
   }
 }
 
-export function pickRandom(total: number, count: number) {
-  return shuffle(Array.from({ length: total }, (_, i) => i)).slice(0, count)
+export function pickRandom(ids: number[], count: number) {
+  return shuffle(ids).slice(0, count)
+}
+
+/**
+ * Quita del historial las preguntas que ya no existen en el test (porque el dueño las borró),
+ * para que las rondas y estadísticas solo cuenten preguntas vigentes.
+ */
+export function sanitizeSession(s: Session, byId: Map<number, Question>): Session | null {
+  const keep = (id: number) => byId.has(id)
+  if (s.qids.every(keep)) return s
+  const rounds = s.rounds
+    .map((r) => ({
+      ...r,
+      qids: r.qids.filter(keep),
+      answers: Object.fromEntries(Object.entries(r.answers).filter(([id]) => keep(Number(id)))),
+    }))
+    .filter((r, i) => i === 0 || r.qids.length > 0)
+  if (!rounds[0].qids.length) return null
+  return { ...s, qids: s.qids.filter(keep), rounds }
 }
 
 export function gradeChoice(q: Question, given: unknown): number {

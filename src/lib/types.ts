@@ -1,6 +1,8 @@
 export type QuestionType = 'multiple_choice' | 'seleccion_multiple' | 'verdadero_falso' | 'completar' | 'texto'
 
 interface Base {
+  /** Identificador estable: no cambia aunque se borren o agreguen otras preguntas. */
+  id: number
   consigna: string
   explicacion?: string
 }
@@ -33,6 +35,7 @@ export interface FullTest {
   title: string
   description: string | null
   questions: Question[]
+  byId: Map<number, Question>
   question_count: number
   is_public: boolean
   is_owner: boolean

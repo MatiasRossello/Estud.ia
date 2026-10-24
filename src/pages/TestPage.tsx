@@ -11,6 +11,7 @@ import {
   newSession,
   pendingWrong,
   pickRandom,
+  sanitizeSession,
   roundStats,
   shuffle,
   wrongCounts,
@@ -42,8 +43,13 @@ export default function TestPage() {
   const [count, setCount] = useState(10)
 
   const sessions = useMemo(
-    () => store.sessions.filter((s) => s.testId === id).sort((a, b) => a.createdAt - b.createdAt),
-    [store.sessions, id],
+    () =>
+      store.sessions
+        .filter((s) => s.testId === id)
+        .map((s) => (test ? sanitizeSession(s, test.byId) : s))
+        .filter((s): s is Session => s !== null)
+        .sort((a, b) => a.createdAt - b.createdAt),
+    [store.sessions, id, test],
   )
   const counts = useMemo(() => wrongCounts(sessions), [sessions])
 
@@ -77,7 +83,7 @@ export default function TestPage() {
   function retryWrong(s: Session) {
     const wrong = pendingWrong(s)
     if (!wrong.length) return
-    upsertSession({ ...s, rounds: [...s.rounds, newRound(wrong, test!.questions)] })
+    upsertSession({ ...s, rounds: [...s.rounds, newRound(wrong, test!.byId)] })
     setView({ kind: 'play', sessionId: s.id })
     scrollTo({ top: 0 })
   }
@@ -104,6 +110,7 @@ export default function TestPage() {
     )
   }
 
+  const allIds = test.questions.map((q) => q.id)
   const unfinished = [...sessions].reverse().find((s) => !isSessionDone(s))
   const wrongOnce = [...counts.keys()]
   const wrongTwice = wrongOnce.filter((q) => (counts.get(q) ?? 0) >= 2)
@@ -122,9 +129,16 @@ export default function TestPage() {
           </div>
           {test.description && <p style={{ marginTop: 12, marginBottom: 0 }}>{test.description}</p>}
         </div>
-        <button className="btn" onClick={() => copyText(location.href, 'Link copiado')}>
-          Copiar link para compartir
-        </button>
+        <div className="row">
+          {test.is_owner && (
+            <Link viewTransition to={`/test/${test.id}/editar`} className="btn">
+              Editar test
+            </Link>
+          )}
+          <button className="btn" onClick={() => copyText(`${location.origin}/test/${test.id}`, 'Link copiado')}>
+            Copiar link para compartir
+          </button>
+        </div>
       </div>
 
       {!test.is_public && test.is_owner && (
@@ -156,7 +170,7 @@ export default function TestPage() {
           <p className="muted">
             Las {total} preguntas en orden al azar. Tu primer intento compite en el ranking: acertar rápido da más puntos.
           </p>
-          <button className="btn primary big block" onClick={() => start('full', shuffle([...Array(total).keys()]))}>
+          <button className="btn primary big block" onClick={() => start('full', shuffle(allIds))}>
             Empezar con las {total}
           </button>
         </section>
@@ -182,7 +196,7 @@ export default function TestPage() {
             </div>
             <span className="small muted">de {total}</span>
           </div>
-          <button className="btn big block" onClick={() => start('partial', pickRandom(total, n))}>
+          <button className="btn big block" onClick={() => start('partial', pickRandom(allIds, n))}>
             Empezar con {n}
           </button>
         </section>

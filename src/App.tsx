@@ -6,6 +6,7 @@ import MyTests from './pages/MyTests'
 import Explore from './pages/Explore'
 import TestPage from './pages/TestPage'
 import HowTo from './pages/HowTo'
+import EditTest from './pages/EditTest'
 import ErrorBoundary from './components/ErrorBoundary'
 import { ToastHost } from './components/Toast'
 
@@ -69,6 +70,7 @@ export default function App() {
             <Route path="/explorar" element={<Explore />} />
             <Route path="/como-crear" element={<HowTo />} />
             <Route path="/test/:id" element={<TestPage />} />
+            <Route path="/test/:id/editar" element={<EditTest />} />
             <Route
               path="*"
               element={

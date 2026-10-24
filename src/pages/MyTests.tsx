@@ -108,6 +108,9 @@ export default function MyTests() {
                     >
                       {t.is_public ? 'Hacer privado' : 'Hacer público'}
                     </button>
+                    <Link viewTransition to={`/test/${t.id}/editar`} className="btn small">
+                      Editar
+                    </Link>
                     <button className="btn small" onClick={() => copyText(`${location.origin}/test/${t.id}`, 'Link copiado')}>
                       Copiar link
                     </button>
