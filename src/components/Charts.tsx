@@ -49,7 +49,7 @@ function baseOptions(t: ReturnType<typeof readTheme>, yMax?: number, ySuffix = '
       },
     },
     scales: {
-      x: { grid: { display: false }, ticks: { color: t.text }, border: { color: t.grid } },
+      x: { grid: { display: false }, ticks: { color: t.text, font: { family: 'Atkinson Hyperlegible Next, system-ui' } }, border: { color: t.grid } },
       y: {
         min: 0,
         max: yMax,

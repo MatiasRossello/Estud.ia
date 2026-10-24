@@ -11,25 +11,25 @@ export default function Leaderboard({ testId, refreshKey = 0 }: { testId: string
   const meInTop = me && rows.some((r) => r.rank === me.rank && r.player_name === me.player_name && r.score === me.score)
 
   return (
-    <div className="card">
-      <h2>🏆 Ranking</h2>
+    <section className="card" aria-labelledby={`lb-${testId}`}>
+      <h2 id={`lb-${testId}`}>Ranking</h2>
       <p className="muted small">
-        Solo cuentan los intentos con el banco completo de preguntas (el primer intento de cada sesión). Los puntos
-        premian acertar y responder rápido, estilo Kahoot. Se guarda tu mejor puntaje.
+        Cuenta el primer intento haciendo todas las preguntas. Cada respuesta correcta vale hasta 1000 puntos: cuanto
+        más rápido, más puntos. Se guarda tu mejor resultado.
       </p>
       {error && <div className="alert error">{error}</div>}
-      {loading && !data && <p className="muted">Cargando…</p>}
-      {data && !rows.length && <p className="muted">Nadie entró al ranking todavía. ¡Sé el primero!</p>}
+      {loading && !data && <p className="muted" role="status">Cargando el ranking…</p>}
+      {data && !rows.length && <p className="muted">Todavía nadie entró al ranking. Hacé todas las preguntas y ocupá el primer lugar.</p>}
       {!!rows.length && (
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>#</th>
-                <th>Nombre</th>
-                <th className="num">Puntos</th>
-                <th className="num">Correctas</th>
-                <th className="num">Tiempo</th>
+                <th scope="col">Puesto</th>
+                <th scope="col">Nombre</th>
+                <th scope="col" className="num">Puntos</th>
+                <th scope="col" className="num">Correctas</th>
+                <th scope="col" className="num">Tiempo</th>
               </tr>
             </thead>
             <tbody>
@@ -37,7 +37,7 @@ export default function Leaderboard({ testId, refreshKey = 0 }: { testId: string
                 const isMe = me && r.rank === me.rank && r.player_name === me.player_name && r.score === me.score
                 return (
                   <tr key={i} className={isMe ? 'me' : undefined}>
-                    <td>{r.rank <= 3 ? ['🥇', '🥈', '🥉'][r.rank - 1] : r.rank}</td>
+                    <td>{r.rank <= 3 ? <><span aria-hidden="true">{['🥇', '🥈', '🥉'][r.rank - 1]} </span>{r.rank}</> : r.rank}</td>
                     <td>{r.player_name}{isMe && ' (vos)'}</td>
                     <td className="num">{r.score.toLocaleString('es-AR')}</td>
                     <td className="num">{r.correct}/{r.total}</td>
@@ -58,6 +58,6 @@ export default function Leaderboard({ testId, refreshKey = 0 }: { testId: string
           </table>
         </div>
       )}
-    </div>
+    </section>
   )
 }

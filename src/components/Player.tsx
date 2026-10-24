@@ -16,8 +16,16 @@ function emptyGiven(q: Question): Given {
 
 function canSubmit(q: Question, g: Given) {
   if (q.tipo === 'multiple_choice' || q.tipo === 'verdadero_falso') return g !== null
-  if (q.tipo === 'seleccion_multiple') return (g as number[]).length > 0
+  if (q.tipo === 'seleccion_multiple') return Array.isArray(g) && g.length > 0
   return Array.isArray(g) && (g as string[]).some((s) => s.trim())
+}
+
+const INSTRUCTIONS: Record<Question['tipo'], string> = {
+  multiple_choice: 'Elegí una opción.',
+  seleccion_multiple: 'Marcá todas las opciones correctas.',
+  verdadero_falso: 'Elegí verdadero o falso.',
+  completar: 'Escribí la palabra que falta en cada hueco.',
+  texto: 'Escribí tu respuesta con tus palabras.',
 }
 
 interface Props {
@@ -35,6 +43,7 @@ export default function Player({ test, session, onRoundEnd, onExit }: Props) {
   const qid = round.qids[shownPos]
   const q = test.questions[qid]
   const record = round.answers[qid] as AnswerRecord | undefined
+  const optionOrder = round.optionOrders[qid]
 
   // La respuesta en curso va atada a su pregunta: al cambiar de pregunta nunca se lee la de la anterior.
   const [draft, setDraft] = useState<{ qid: number; value: Given }>(() => ({ qid, value: emptyGiven(q) }))
@@ -44,12 +53,16 @@ export default function Player({ test, session, onRoundEnd, onExit }: Props) {
   const [error, setError] = useState<string | null>(null)
   const startRef = useRef(Date.now())
   const [elapsed, setElapsed] = useState(0)
-  const nextRef = useRef<HTMLButtonElement>(null)
+  const questionRef = useRef<HTMLHeadingElement>(null)
+  const feedbackRef = useRef<HTMLDivElement>(null)
 
+  // Pregunta nueva: reinicia el reloj y mueve el foco a la consigna.
   useEffect(() => {
     setError(null)
     startRef.current = Date.now()
     setElapsed(0)
+    if (!record) questionRef.current?.focus({ preventScroll: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qid])
 
   useEffect(() => {
@@ -59,7 +72,7 @@ export default function Player({ test, session, onRoundEnd, onExit }: Props) {
   }, [record, qid])
 
   useEffect(() => {
-    if (record) nextRef.current?.focus()
+    if (record) feedbackRef.current?.focus()
   }, [record])
 
   async function submit() {
@@ -87,7 +100,7 @@ export default function Player({ test, session, onRoundEnd, onExit }: Props) {
       rounds[roundIdx] = { ...round, answers: { ...round.answers, [qid]: answer } }
       upsertSession({ ...session, rounds })
     } catch (e) {
-      setError(`No se pudo corregir: ${(e as Error).message}. Probá de nuevo.`)
+      setError(`No se pudo corregir tu respuesta (${(e as Error).message}). Revisá tu conexión y tocá "Responder" de nuevo.`)
     } finally {
       setGrading(false)
     }
@@ -104,23 +117,23 @@ export default function Player({ test, session, onRoundEnd, onExit }: Props) {
     }
   }
 
-  // Atajos: números para elegir opciones, Enter para responder / seguir.
+  // Atajos: números para elegir opciones, Enter para responder o seguir.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      const typing = (e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA'
-      if (e.key === 'Enter' && !e.shiftKey && !(e.target as HTMLElement).closest('button')) {
+      const el = e.target as HTMLElement
+      const typing = el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && (el as HTMLInputElement).type === 'text')
+      if (e.key === 'Enter' && !e.shiftKey && !el.closest('button, a, summary')) {
         e.preventDefault()
         if (record) next()
         else submit()
         return
       }
-      if (typing || record || e.metaKey || e.ctrlKey) return
+      if (typing || record || e.metaKey || e.ctrlKey || e.altKey) return
       const n = Number(e.key)
       if (!Number.isInteger(n) || n < 1) return
       if (q.tipo === 'verdadero_falso' && n <= 2) setGiven(n === 1)
-      if (q.tipo === 'multiple_choice' || q.tipo === 'seleccion_multiple') {
-        const order = round.optionOrders[qid]
-        if (n <= order.length) choose(order[n - 1])
+      if ((q.tipo === 'multiple_choice' || q.tipo === 'seleccion_multiple') && n <= optionOrder.length) {
+        choose(optionOrder[n - 1])
       }
     }
     window.addEventListener('keydown', onKey)
@@ -141,116 +154,182 @@ export default function Player({ test, session, onRoundEnd, onExit }: Props) {
   const shownTime = record ? record.timeMs : elapsed
   const potential = computePoints(1, shownTime, q.tipo)
   const answered = Object.keys(round.answers).length
-  const roundLabel = roundIdx === 0 ? (session.mode === 'review' ? 'Repaso' : 'Primer intento') : `Repaso de falladas ${roundIdx}`
+  const roundLabel =
+    roundIdx === 0 ? (session.mode === 'review' ? 'Repaso de errores' : 'Primer intento') : `Repaso de falladas · vuelta ${roundIdx}`
+  const shown = record ? record.given : given
+  const isChoice = q.tipo === 'multiple_choice' || q.tipo === 'seleccion_multiple'
 
   return (
-    <div className="card">
-      <div className="spread small" style={{ marginBottom: 10 }}>
-        <span>
-          <strong>{roundLabel}</strong> · Pregunta {shownPos + 1} de {round.qids.length}
-        </span>
-        <button className="btn" onClick={onExit} title="Tu progreso queda guardado">
-          Guardar y salir
+    <>
+      <div className="play-top">
+        <div>
+          <div className="title">{test.title}</div>
+          <div className="small muted">{roundLabel}</div>
+        </div>
+        <button className="btn small" onClick={onExit}>
+          Pausar y salir
+          <span className="visually-hidden"> (tu progreso queda guardado)</span>
         </button>
       </div>
-      <div className="progress" aria-hidden>
+
+      <div
+        className="progress"
+        role="progressbar"
+        aria-label="Avance de la ronda"
+        aria-valuemin={0}
+        aria-valuemax={round.qids.length}
+        aria-valuenow={answered}
+        aria-valuetext={`${answered} de ${round.qids.length} respondidas`}
+        style={{ marginBottom: 16 }}
+      >
         <div style={{ width: `${(answered / round.qids.length) * 100}%` }} />
       </div>
 
-      <div className="spread" style={{ marginTop: 18 }}>
-        <span className="badge accent">{TYPE_LABELS[q.tipo]}</span>
-        <span className="small muted" aria-live="off">
-          {record ? (
-            <>
-              <span className="points">+{record.points}</span> puntos
-            </>
+      <section className="ficha" aria-labelledby="consigna">
+        <div className="ficha-head">
+          <span>
+            <strong>Pregunta {shownPos + 1}</strong> de {round.qids.length} · {TYPE_LABELS[q.tipo]}
+          </span>
+          <span className="row" style={{ gap: 6 }}>
+            {!record && (
+              <span className="small" aria-hidden="true">
+                Hasta <span className="points">{potential}</span> pts
+              </span>
+            )}
+            {record && (
+              <span className="small">
+                <span className="points">+{record.points}</span> pts
+              </span>
+            )}
+          </span>
+        </div>
+        <div className="progress timer" aria-hidden="true">
+          <div style={{ width: `${Math.max(0, 1 - shownTime / limitMs) * 100}%` }} />
+        </div>
+
+        <div className="ficha-body">
+          {q.tipo === 'completar' ? (
+            <BlankText
+              q={q}
+              values={(shown as string[]) ?? []}
+              disabled={!!record}
+              onChange={setGiven}
+              headingRef={questionRef}
+            />
           ) : (
+            <h2 id="consigna" className="question-text" tabIndex={-1} ref={questionRef}>
+              {q.consigna}
+            </h2>
+          )}
+          <p className="small muted" id="instr" style={{ marginTop: -10 }}>
+            {INSTRUCTIONS[q.tipo]}
+          </p>
+
+          {isChoice && (
+            <fieldset className="options" aria-describedby="instr">
+              <legend className="visually-hidden">{q.consigna}</legend>
+              {optionOrder.map((opt, i) => {
+                const multi = q.tipo === 'seleccion_multiple'
+                const selected = multi ? ((shown as number[]) ?? []).includes(opt) : shown === opt
+                const isCorrect = q.correctas.includes(opt)
+                const state = record ? (isCorrect ? 'correct' : selected ? 'wrong' : '') : ''
+                return (
+                  <label key={opt} className={`option${multi ? ' multi' : ''} ${state}${record ? ' locked' : ''}`}>
+                    <input
+                      type={multi ? 'checkbox' : 'radio'}
+                      name={`q-${qid}`}
+                      checked={selected}
+                      disabled={!!record}
+                      onChange={() => choose(opt)}
+                    />
+                    <span className="box">
+                      <span className="key" aria-hidden="true">{multi && selected ? '✓' : i + 1}</span>
+                      <span>{q.opciones[opt]}</span>
+                      {record && (isCorrect || selected) && (
+                        <span className="verdict">
+                          {isCorrect ? (selected ? '✓ Correcta' : '✓ Era correcta') : '✗ Incorrecta'}
+                        </span>
+                      )}
+                    </span>
+                  </label>
+                )
+              })}
+            </fieldset>
+          )}
+
+          {q.tipo === 'verdadero_falso' && (
+            <fieldset className="options two" aria-describedby="instr">
+              <legend className="visually-hidden">{q.consigna}</legend>
+              {[true, false].map((v, i) => {
+                const selected = shown === v
+                const state = record ? (v === q.respuesta ? 'correct' : selected ? 'wrong' : '') : ''
+                return (
+                  <label key={String(v)} className={`option ${state}${record ? ' locked' : ''}`}>
+                    <input
+                      type="radio"
+                      name={`q-${qid}`}
+                      checked={selected}
+                      disabled={!!record}
+                      onChange={() => setGiven(v)}
+                    />
+                    <span className="box">
+                      <span className="key" aria-hidden="true">{i + 1}</span>
+                      <span>{v ? 'Verdadero' : 'Falso'}</span>
+                      {record && (v === q.respuesta || selected) && (
+                        <span className="verdict">{v === q.respuesta ? '✓ Correcta' : '✗ Incorrecta'}</span>
+                      )}
+                    </span>
+                  </label>
+                )
+              })}
+            </fieldset>
+          )}
+
+          {q.tipo === 'texto' && (
             <>
-              Hasta <span className="points">{potential}</span> pts
+              <label htmlFor={`ans-${qid}`} className="visually-hidden">Tu respuesta</label>
+              <textarea
+                id={`ans-${qid}`}
+                className="answer-area"
+                rows={3}
+                value={((shown as string[]) ?? [''])[0]}
+                onChange={(e) => setGiven([e.target.value])}
+                disabled={!!record}
+                aria-describedby="instr"
+                placeholder="Escribí acá…"
+              />
             </>
           )}
-        </span>
-      </div>
-      <div className="progress timer" style={{ marginTop: 8, height: 6 }} aria-hidden>
-        <div style={{ width: `${Math.max(0, 1 - shownTime / limitMs) * 100}%` }} />
-      </div>
 
-      {q.tipo === 'completar' ? (
-        <BlankText q={q} values={given as string[]} disabled={!!record} onChange={setGiven} />
-      ) : (
-        <p className="question-text">{q.consigna}</p>
-      )}
-
-      {(q.tipo === 'multiple_choice' || q.tipo === 'seleccion_multiple') && (
-        <div className="options" role={q.tipo === 'multiple_choice' ? 'radiogroup' : 'group'}>
-          {q.tipo === 'seleccion_multiple' && !record && (
-            <p className="muted small" style={{ margin: 0 }}>Marcá todas las correctas.</p>
+          {error && (
+            <div className="alert error" role="alert" style={{ marginTop: 16, marginBottom: 0 }}>
+              <span className="icon" aria-hidden="true">✗</span>
+              <div className="alert-body">{error}</div>
+            </div>
           )}
-          {round.optionOrders[qid].map((opt, i) => {
-            const selected = Array.isArray(record?.given ?? given)
-              ? ((record?.given ?? given) as number[]).includes(opt)
-              : (record?.given ?? given) === opt
-            const isCorrect = q.correctas.includes(opt)
-            const cls = record ? (isCorrect ? 'correct' : selected ? 'wrong' : '') : selected ? 'selected' : ''
-            return (
-              <button
-                key={opt}
-                className={`option ${cls}`}
-                onClick={() => choose(opt)}
-                disabled={!!record}
-                role={q.tipo === 'multiple_choice' ? 'radio' : 'checkbox'}
-                aria-checked={selected}
-              >
-                <span className="key">{q.tipo === 'seleccion_multiple' ? (selected ? '✓' : i + 1) : i + 1}</span>
-                <span>{q.opciones[opt]}</span>
+
+          {!record ? (
+            <div className="row" style={{ marginTop: 22 }}>
+              <button className="btn primary big" onClick={submit} disabled={!canSubmit(q, given) || grading}>
+                {grading ? 'Corrigiendo…' : 'Responder'}
               </button>
-            )
-          })}
-        </div>
-      )}
-
-      {q.tipo === 'verdadero_falso' && (
-        <div className="options" role="radiogroup" style={{ gridTemplateColumns: '1fr 1fr' }}>
-          {[true, false].map((v, i) => {
-            const selected = (record ? record.given : given) === v
-            const cls = record ? (v === q.respuesta ? 'correct' : selected ? 'wrong' : '') : selected ? 'selected' : ''
-            return (
-              <button key={String(v)} className={`option ${cls}`} onClick={() => !record && setGiven(v)} disabled={!!record} role="radio" aria-checked={selected}>
-                <span className="key">{i + 1}</span>
-                <span>{v ? 'Verdadero' : 'Falso'}</span>
-              </button>
-            )
-          })}
-        </div>
-      )}
-
-      {q.tipo === 'texto' && (
-        <textarea
-          rows={3}
-          value={((record?.given ?? given) as string[])[0]}
-          onChange={(e) => setGiven([e.target.value])}
-          disabled={!!record}
-          placeholder="Escribí tu respuesta… (Enter para enviar, Shift+Enter para nueva línea)"
-          aria-label="Tu respuesta"
-          autoFocus
-        />
-      )}
-
-      {error && <div className="alert error" style={{ marginTop: 14 }}>{error}</div>}
-
-      {!record ? (
-        <div className="row" style={{ marginTop: 18 }}>
-          <button className="btn primary big" onClick={submit} disabled={!canSubmit(q, given) || grading}>
-            {grading ? 'Corrigiendo…' : 'Responder'}
-          </button>
-          {(q.tipo === 'texto' || q.tipo === 'completar') && grading && (
-            <span className="muted small">La IA está comparando tu respuesta…</span>
+              <span className="kbd-hint" aria-live="polite">
+                {grading && (q.tipo === 'texto' || q.tipo === 'completar')
+                  ? 'Una IA está comparando tu respuesta con la correcta…'
+                  : (
+                    <span aria-hidden="true">
+                      {isChoice || q.tipo === 'verdadero_falso' ? <>Atajos: <kbd>1</kbd>–<kbd>{isChoice ? optionOrder.length : 2}</kbd> para elegir, </> : null}
+                      <kbd>Enter</kbd> para responder
+                    </span>
+                  )}
+              </span>
+            </div>
+          ) : (
+            <Feedback q={q} record={record} onNext={next} feedbackRef={feedbackRef} last={pos === -1} />
           )}
         </div>
-      ) : (
-        <Feedback q={q} record={record} onNext={next} nextRef={nextRef} last={pos === -1} />
-      )}
-    </div>
+      </section>
+    </>
   )
 }
 
@@ -259,32 +338,39 @@ function BlankText({
   values,
   disabled,
   onChange,
+  headingRef,
 }: {
   q: Extract<Question, { tipo: 'completar' }>
   values: string[]
   disabled: boolean
   onChange: (v: string[]) => void
+  headingRef: React.RefObject<HTMLHeadingElement | null>
 }) {
   const parts = q.consigna.split(BLANK_RE)
   return (
-    <p className="question-text">
-      {parts.map((part, i) => (
-        <Fragment key={i}>
-          {part}
-          {i < parts.length - 1 && (
-            <input
-              type="text"
-              className="blank-input"
-              value={values[i] ?? ''}
-              disabled={disabled}
-              autoFocus={i === 0}
-              aria-label={`Hueco ${i + 1}`}
-              onChange={(e) => onChange(values.map((v, k) => (k === i ? e.target.value : v)))}
-            />
-          )}
-        </Fragment>
-      ))}
-    </p>
+    <>
+      <h2 id="consigna" className="visually-hidden" tabIndex={-1} ref={headingRef}>
+        {q.consigna.replace(BLANK_RE, '(espacio en blanco)')}
+      </h2>
+      <p className="question-text" aria-hidden={false}>
+        {parts.map((part, i) => (
+          <Fragment key={i}>
+            {part}
+            {i < parts.length - 1 && (
+              <input
+                type="text"
+                className="blank-input"
+                value={values[i] ?? ''}
+                disabled={disabled}
+                aria-label={`Hueco ${i + 1} de ${parts.length - 1}`}
+                autoComplete="off"
+                onChange={(e) => onChange(values.map((v, k) => (k === i ? e.target.value : v)))}
+              />
+            )}
+          </Fragment>
+        ))}
+      </p>
+    </>
   )
 }
 
@@ -292,40 +378,55 @@ function Feedback({
   q,
   record,
   onNext,
-  nextRef,
+  feedbackRef,
   last,
 }: {
   q: Question
   record: AnswerRecord
   onNext: () => void
-  nextRef: React.RefObject<HTMLButtonElement | null>
+  feedbackRef: React.RefObject<HTMLDivElement | null>
   last: boolean
 }) {
   const written = q.tipo === 'texto' || q.tipo === 'completar'
+  const kind = record.correct ? 'good' : record.score > 0 ? 'partial' : 'bad'
+  const title = record.correct ? '✓ ¡Correcto!' : record.score > 0 ? '≈ Casi' : '✗ Incorrecto'
   return (
-    <div className={`feedback ${record.correct ? 'good' : 'bad'}`} role="status">
-      <div className="title">
-        {record.correct ? '✓ ¡Correcto!' : record.score > 0 ? '≈ Casi' : '✗ Incorrecto'}
-        {written && <span className="small muted"> · la IA te dio {Math.round(record.score * 100)}%</span>}
-      </div>
-      {record.feedback && <p style={{ margin: '6px 0 0' }}>{record.feedback}</p>}
+    <div className={`feedback ${kind}`} ref={feedbackRef} tabIndex={-1} role="status">
+      <div className="title">{title}</div>
+      {written && <p className="small">La IA evaluó tu respuesta con un {Math.round(record.score * 100)}%.</p>}
+      {record.feedback && <p>{record.feedback}</p>}
       {q.tipo === 'verdadero_falso' && !record.correct && (
-        <p style={{ margin: '6px 0 0' }}>La respuesta era <strong>{q.respuesta ? 'Verdadero' : 'Falso'}</strong>.</p>
+        <p>La respuesta correcta es <strong>{q.respuesta ? 'Verdadero' : 'Falso'}</strong>.</p>
       )}
-      {q.tipo === 'texto' && (
-        <p style={{ margin: '6px 0 0' }}>Respuesta esperada: <strong>{q.respuestas.join(' / ')}</strong></p>
-      )}
-      {q.tipo === 'completar' && (
-        <p style={{ margin: '6px 0 0' }}>
-          Respuestas: {q.respuestas.map((r, i) => <strong key={i}>{i ? ' · ' : ''}{r.join(' / ')}</strong>)}
+      {(q.tipo === 'multiple_choice' || q.tipo === 'seleccion_multiple') && !record.correct && (
+        <p>
+          {q.correctas.length > 1 ? 'Las correctas son' : 'La correcta es'}{' '}
+          <strong>{q.correctas.map((c) => q.opciones[c]).join(', ')}</strong>.
         </p>
       )}
-      {q.explicacion && <p style={{ margin: '8px 0 0' }} className="small">💡 {q.explicacion}</p>}
-      <div className="row" style={{ marginTop: 14 }}>
-        <button ref={nextRef} className="btn primary big" onClick={onNext}>
-          {last ? 'Ver resultados' : 'Siguiente →'}
+      {q.tipo === 'texto' && (
+        <p>Respuesta esperada: <strong>{q.respuestas.join(' / ')}</strong></p>
+      )}
+      {q.tipo === 'completar' && (
+        <p>
+          {q.respuestas.length > 1 ? 'Las palabras eran' : 'La palabra era'}{' '}
+          {q.respuestas.map((r, i) => (
+            <Fragment key={i}>
+              {i > 0 && ', '}
+              <strong>{r[0]}</strong>
+            </Fragment>
+          ))}
+          .
+        </p>
+      )}
+      {q.explicacion && <p className="small"><strong>Por qué:</strong> {q.explicacion}</p>}
+      <div className="row" style={{ marginTop: 16 }}>
+        <button className="btn primary big" onClick={onNext}>
+          {last ? 'Ver mis resultados' : 'Siguiente pregunta'}
         </button>
-        <span className="small muted">+{record.points} de {MAX_POINTS} pts</span>
+        <span className="small muted">
+          Sumaste {record.points} de {MAX_POINTS} puntos
+        </span>
       </div>
     </div>
   )

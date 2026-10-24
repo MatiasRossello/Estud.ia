@@ -15,29 +15,31 @@ import {
   shuffle,
   wrongCounts,
 } from '../lib/quiz'
+import { useTitle } from '../lib/useTitle'
 import Player from '../components/Player'
 import Results from '../components/Results'
 import Leaderboard from '../components/Leaderboard'
 import { SessionsChart } from '../components/Charts'
+import { copyText } from '../components/Toast'
 
 type View = { kind: 'home' } | { kind: 'play'; sessionId: string } | { kind: 'results'; sessionId: string }
 
 const MODE_LABELS: Record<SessionMode, string> = {
-  full: 'Banco completo',
-  partial: 'Parcial',
-  review: 'Repaso de falladas',
+  full: 'Todas las preguntas',
+  partial: 'Algunas preguntas',
+  review: 'Repaso de errores',
 }
 
 const fmtDate = (ts: number) =>
-  new Date(ts).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+  new Date(ts).toLocaleString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 
 export default function TestPage() {
   const { id = '' } = useParams()
   const { data: test, error, loading } = useAsync(() => api.getTest(id), [id])
+  useTitle(test?.title)
   const store = useStore()
   const [view, setView] = useState<View>({ kind: 'home' })
   const [count, setCount] = useState(10)
-  const [copied, setCopied] = useState(false)
 
   const sessions = useMemo(
     () => store.sessions.filter((s) => s.testId === id).sort((a, b) => a.createdAt - b.createdAt),
@@ -45,12 +47,20 @@ export default function TestPage() {
   )
   const counts = useMemo(() => wrongCounts(sessions), [sessions])
 
-  if (loading) return <p className="muted">Cargando test…</p>
-  if (error) return <div className="alert error">{error}</div>
+  if (loading) return <p className="muted" role="status">Cargando el test…</p>
+  if (error)
+    return (
+      <div className="alert error" role="alert">
+        <span className="icon" aria-hidden="true">✗</span>
+        <div className="alert-body">No se pudo cargar el test: {error}</div>
+      </div>
+    )
   if (!test)
     return (
-      <div className="card">
-        Este test no existe o es privado. <Link to="/explorar">Ver tests públicos</Link>
+      <div className="card empty">
+        <h1>No encontramos este test</h1>
+        <p className="muted">Puede que lo hayan borrado o que sea privado.</p>
+        <Link to="/explorar" className="btn primary">Ver tests públicos</Link>
       </div>
     )
 
@@ -74,16 +84,13 @@ export default function TestPage() {
 
   if (current && view.kind === 'play' && !isSessionDone(current)) {
     return (
-      <>
-        <h2 style={{ marginBottom: 14 }}>{test.title}</h2>
-        <Player
-          key={`${current.id}-${current.rounds.length}`}
-          test={test}
-          session={current}
-          onRoundEnd={() => setView({ kind: 'results', sessionId: current.id })}
-          onExit={() => setView({ kind: 'home' })}
-        />
-      </>
+      <Player
+        key={`${current.id}-${current.rounds.length}`}
+        test={test}
+        session={current}
+        onRoundEnd={() => setView({ kind: 'results', sessionId: current.id })}
+        onExit={() => setView({ kind: 'home' })}
+      />
     )
   }
   if (current && view.kind !== 'home') {
@@ -105,90 +112,106 @@ export default function TestPage() {
 
   return (
     <>
-      <div className="spread">
+      <div className="spread page-head">
         <div>
-          <h1 style={{ marginBottom: 4 }}>{test.title}</h1>
-          <div className="row small muted">
-            <span>{total} preguntas</span>
-            <span className={`badge${test.is_public ? ' public' : ''}`}>{test.is_public ? 'Público' : 'Privado'}</span>
-            {test.is_owner && <span className="badge accent">Tuyo</span>}
+          <h1 style={{ marginBottom: 6 }}>{test.title}</h1>
+          <div className="row small">
+            <span className="badge">{total} preguntas</span>
+            <span className={`badge${test.is_public ? ' public' : ''}`}>{test.is_public ? '● Público' : '○ Privado'}</span>
+            {test.is_owner && <span className="badge">Lo subiste vos</span>}
           </div>
+          {test.description && <p style={{ marginTop: 12, marginBottom: 0 }}>{test.description}</p>}
         </div>
-        <button
-          className="btn"
-          onClick={() => {
-            navigator.clipboard.writeText(location.href)
-            setCopied(true)
-            setTimeout(() => setCopied(false), 1500)
-          }}
-        >
-          {copied ? '¡Link copiado!' : 'Compartir link'}
+        <button className="btn" onClick={() => copyText(location.href, 'Link copiado')}>
+          Copiar link para compartir
         </button>
       </div>
-      {test.description && <p className="muted" style={{ marginTop: 10 }}>{test.description}</p>}
+
       {!test.is_public && test.is_owner && (
         <p className="small muted">
-          Solo vos podés ver este test. Hacelo público desde <Link to="/mis-tests">Mis tests</Link>.
+          Solo vos ves este test. Para compartirlo, hacelo público en <Link to="/mis-tests">Mis tests</Link>.
         </p>
       )}
 
       {unfinished && (
-        <div className="alert warn spread">
-          <span>
-            Tenés un test sin terminar ({MODE_LABELS[unfinished.mode]}, {fmtDate(unfinished.createdAt)}).
-          </span>
-          <button className="btn primary" onClick={() => setView({ kind: 'play', sessionId: unfinished.id })}>
-            Continuar
-          </button>
+        <div className="alert info" role="status">
+          <span className="icon" aria-hidden="true">⏸</span>
+          <div className="alert-body spread">
+            <span>
+              Dejaste un test por la mitad ({MODE_LABELS[unfinished.mode].toLowerCase()}, {fmtDate(unfinished.createdAt)}).
+            </span>
+            <button className="btn primary small" onClick={() => setView({ kind: 'play', sessionId: unfinished.id })}>
+              Seguir donde lo dejé
+            </button>
+          </div>
         </div>
       )}
 
-      <div className="grid" style={{ marginTop: 18 }}>
-        <div className="card stack" style={{ marginBottom: 0 }}>
-          <h2>Banco completo</h2>
-          <p className="muted small" style={{ margin: 0 }}>
-            Las {total} preguntas en orden aleatorio. <strong>Cuenta para el ranking.</strong>
+      <h2 className="visually-hidden">Empezar</h2>
+      <div className="choice-grid">
+        <section className="card choice-main stack" aria-labelledby="full-title">
+          <h3 id="full-title" style={{ fontSize: '1.3rem' }}>
+            Todas las preguntas <span className="badge brand">Suma al ranking</span>
+          </h3>
+          <p className="muted">
+            Las {total} preguntas en orden al azar. Tu primer intento compite en el ranking: acertar rápido da más puntos.
           </p>
-          <button className="btn primary big" onClick={() => start('full', shuffle([...Array(total).keys()]))}>
-            Empezar banco completo
+          <button className="btn primary big block" onClick={() => start('full', shuffle([...Array(total).keys()]))}>
+            Empezar con las {total}
           </button>
-        </div>
-        <div className="card stack" style={{ marginBottom: 0 }}>
-          <h2>Test parcial</h2>
-          <p className="muted small" style={{ margin: 0 }}>Preguntas elegidas al azar del banco. No cuenta para el ranking.</p>
+        </section>
+
+        <section className="card stack" aria-labelledby="partial-title">
+          <h3 id="partial-title" style={{ fontSize: '1.3rem' }}>Algunas preguntas</h3>
+          <p className="muted">Para practicar un rato. Se eligen al azar y no suman al ranking.</p>
           <div className="row">
-            <input
-              type="number"
-              min={1}
-              max={total}
-              value={count}
-              onChange={(e) => setCount(Number(e.target.value))}
-              style={{ width: 90 }}
-              aria-label="Cantidad de preguntas"
-            />
-            <span className="muted small">de {total}</span>
+            <label htmlFor="q-count" className="small" style={{ fontWeight: 700 }}>Cantidad</label>
+            <div className="stepper">
+              <button type="button" onClick={() => setCount(Math.max(1, n - 5))} disabled={n <= 1} aria-label="Restar 5 preguntas">−</button>
+              <input
+                id="q-count"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={total}
+                value={count}
+                onChange={(e) => setCount(Number(e.target.value))}
+                onBlur={() => setCount(n)}
+              />
+              <button type="button" onClick={() => setCount(Math.min(total, n + 5))} disabled={n >= total} aria-label="Sumar 5 preguntas">+</button>
+            </div>
+            <span className="small muted">de {total}</span>
           </div>
-          <button className="btn big" onClick={() => start('partial', pickRandom(total, n))}>
-            Empezar con {n} pregunta{n === 1 ? '' : 's'}
+          <button className="btn big block" onClick={() => start('partial', pickRandom(total, n))}>
+            Empezar con {n}
           </button>
-        </div>
-        <div className="card stack" style={{ marginBottom: 0 }}>
-          <h2>Repasar errores</h2>
-          <p className="muted small" style={{ margin: 0 }}>Según todo tu historial con este test.</p>
-          <button className="btn" disabled={!wrongTwice.length} onClick={() => start('review', shuffle(wrongTwice))}>
-            Falladas más de una vez ({wrongTwice.length})
-          </button>
-          <button className="btn" disabled={!wrongOnce.length} onClick={() => start('review', shuffle(wrongOnce))}>
-            Falladas alguna vez ({wrongOnce.length})
-          </button>
-        </div>
+        </section>
       </div>
 
+      <section className="card section" aria-labelledby="review-title">
+        <h2 id="review-title">Repasar tus errores</h2>
+        {wrongOnce.length ? (
+          <>
+            <p className="muted">Según todo lo que respondiste en este test hasta ahora.</p>
+            <div className="row">
+              <button className="btn primary" disabled={!wrongTwice.length} onClick={() => start('review', shuffle(wrongTwice))}>
+                Las que fallé más de una vez ({wrongTwice.length})
+              </button>
+              <button className="btn" onClick={() => start('review', shuffle(wrongOnce))}>
+                Todas las que fallé alguna vez ({wrongOnce.length})
+              </button>
+            </div>
+          </>
+        ) : (
+          <p className="muted">Cuando te equivoques en alguna pregunta, vas a poder repasarla desde acá.</p>
+        )}
+      </section>
+
       {finished.length > 0 && (
-        <div className="card" style={{ marginTop: 18 }}>
-          <h2>Tu progreso</h2>
+        <section className="card section" aria-labelledby="progress-title">
+          <h2 id="progress-title">Tu progreso</h2>
           <p className="muted small">
-            Porcentaje de respuestas correctas en el primer intento de cada sesión y después de repasar las falladas.
+            Qué porcentaje acertaste de entrada en cada intento, y cuánto llegaste a saber después de repasar.
           </p>
           <SessionsChart
             labels={finished.map((s) => fmtDate(s.createdAt))}
@@ -198,18 +221,17 @@ export default function TestPage() {
               return Math.round((c[c.length - 1] / s.qids.length) * 100)
             })}
           />
-          <h3 style={{ marginTop: 22 }}>Historial de intentos</h3>
-          <div className="table-wrap">
+          <div className="table-wrap" style={{ marginTop: 22 }}>
             <table>
+              <caption><h3 style={{ margin: '0 0 6px' }}>Todos tus intentos</h3></caption>
               <thead>
                 <tr>
-                  <th>Fecha</th>
-                  <th>Modo</th>
-                  <th className="num">1er intento</th>
-                  <th className="num">Final</th>
-                  <th className="num">Repasos</th>
-                  <th className="num">Puntos</th>
-                  <th />
+                  <th scope="col">Fecha</th>
+                  <th scope="col">Tipo</th>
+                  <th scope="col" className="num">De entrada</th>
+                  <th scope="col" className="num">Al final</th>
+                  <th scope="col" className="num">Puntos</th>
+                  <th scope="col"><span className="visually-hidden">Acciones</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -222,20 +244,19 @@ export default function TestPage() {
                       <td>{MODE_LABELS[s.mode]}</td>
                       <td className="num">{c[0]}/{s.qids.length}</td>
                       <td className="num">{c[c.length - 1]}/{s.qids.length}</td>
-                      <td className="num">{s.rounds.length - 1}</td>
                       <td className="num">{roundStats(s.rounds[0]).points.toLocaleString('es-AR')}</td>
                       <td className="num">
                         {!isSessionDone(s) ? (
                           <button className="btn small" onClick={() => setView({ kind: 'play', sessionId: s.id })}>
-                            Continuar
+                            Seguir
                           </button>
                         ) : pending > 0 ? (
                           <button className="btn small" onClick={() => retryWrong(s)}>
-                            Rehacer {pending} fallada{pending === 1 ? '' : 's'}
+                            Repetir {pending} fallada{pending === 1 ? '' : 's'}
                           </button>
                         ) : (
-                          <button className="btn small" onClick={() => setView({ kind: 'results', sessionId: s.id })}>
-                            Ver
+                          <button className="btn small ghost" onClick={() => setView({ kind: 'results', sessionId: s.id })}>
+                            Ver resultado
                           </button>
                         )}
                       </td>
@@ -245,10 +266,10 @@ export default function TestPage() {
               </tbody>
             </table>
           </div>
-        </div>
+        </section>
       )}
 
-      <div style={{ marginTop: 18 }}>
+      <div className="section">
         <Leaderboard testId={test.id} />
       </div>
     </>

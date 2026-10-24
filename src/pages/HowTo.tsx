@@ -1,24 +1,11 @@
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AI_PROMPT, EXAMPLE_JSON } from '../lib/example'
-
-function CopyButton({ text, label }: { text: string; label: string }) {
-  const [done, setDone] = useState(false)
-  return (
-    <button
-      className="btn primary"
-      onClick={() => {
-        navigator.clipboard.writeText(text)
-        setDone(true)
-        setTimeout(() => setDone(false), 1800)
-      }}
-    >
-      {done ? '¡Copiado!' : label}
-    </button>
-  )
-}
+import { useTitle } from '../lib/useTitle'
+import { copyText } from '../components/Toast'
+import { TYPE_LABELS } from '../lib/types'
 
 export default function HowTo() {
+  useTitle('Cómo crear tu JSON')
   const example = JSON.stringify(EXAMPLE_JSON, null, 2)
 
   function download() {
@@ -30,44 +17,72 @@ export default function HowTo() {
 
   return (
     <>
-      <h1>Cómo crear tu JSON</h1>
-      <p className="muted">
-        No hace falta escribirlo a mano: copiá este prompt, pegalo en ChatGPT, Claude, Gemini o la IA que uses, agregá
-        tus apuntes al final y te devuelve el JSON listo para <Link to="/">subir</Link>.
-      </p>
-
-      <div className="card">
-        <div className="spread" style={{ marginBottom: 12 }}>
-          <h2 style={{ margin: 0 }}>1. Copiá el prompt</h2>
-          <CopyButton text={AI_PROMPT} label="Copiar prompt" />
-        </div>
-        <pre>{AI_PROMPT}</pre>
-      </div>
-
-      <div className="card">
-        <h2>2. Completalo</h2>
+      <div className="page-head">
+        <h1>Cómo crear tu JSON</h1>
         <p>
-          Reemplazá <code>[CANTIDAD]</code> por cuántas preguntas querés y <code>[PEGÁ ACÁ TUS APUNTES…]</code> por tu
-          material. Funciona mejor con textos de hasta unas pocas páginas; si tenés más, pedile varias tandas y juntá
-          las preguntas en un solo archivo.
-        </p>
-        <h2>3. Guardalo y subilo</h2>
-        <p style={{ margin: 0 }}>
-          Copiá la respuesta en un archivo <code>.json</code> (o pegala directo en la página de inicio). Si algo está mal,
-          la página te dice qué pregunta tiene el error.
+          No hace falta escribirlo a mano. Tu IA lo arma por vos a partir de tus apuntes: seguí estos tres pasos.
         </p>
       </div>
 
-      <div className="card">
+      <ol className="steps" style={{ gridTemplateColumns: '1fr' }}>
+        <li>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <strong>Copiá el prompt y pegalo en tu IA</strong>
+            <span>Sirve ChatGPT, Claude, Gemini o cualquier otra.</span>
+            <div className="card" style={{ marginTop: 12 }}>
+              <div className="row" style={{ marginBottom: 12 }}>
+                <button className="btn primary" onClick={() => copyText(AI_PROMPT, 'Prompt copiado')}>
+                  Copiar el prompt
+                </button>
+              </div>
+              <details className="disclosure">
+                <summary>Ver el prompt completo</summary>
+                <pre style={{ marginTop: 8 }}>{AI_PROMPT}</pre>
+              </details>
+            </div>
+          </div>
+        </li>
+        <li>
+          <div>
+            <strong>Agregá tus apuntes al final</strong>
+            <span>
+              Cambiá <code>[CANTIDAD]</code> por cuántas preguntas querés y reemplazá <code>[PEGÁ ACÁ TUS APUNTES…]</code>{' '}
+              por tu material. Si es mucho, pedile varias tandas.
+            </span>
+          </div>
+        </li>
+        <li>
+          <div>
+            <strong>Guardá la respuesta y subila</strong>
+            <span>
+              Copiá lo que te devuelve en un archivo <code>.json</code>, o pegalo directo en{' '}
+              <Link to="/subir">Subir preguntas</Link>. Si algo está mal, te decimos en qué pregunta.
+            </span>
+          </div>
+        </li>
+      </ol>
+
+      <section className="card section" aria-labelledby="types-title">
+        <h2 id="types-title">Tipos de pregunta</h2>
+        <ul className="stack" style={{ paddingLeft: 20 }}>
+          <li><strong>{TYPE_LABELS.multiple_choice}</strong>: varias opciones, una sola correcta.</li>
+          <li><strong>{TYPE_LABELS.seleccion_multiple}</strong>: hay que marcar todas las correctas.</li>
+          <li><strong>{TYPE_LABELS.verdadero_falso}</strong>: una afirmación para decir si es cierta.</li>
+          <li><strong>{TYPE_LABELS.completar}</strong>: una frase con huecos <code>___</code> para escribir la palabra.</li>
+          <li><strong>{TYPE_LABELS.texto}</strong>: escribís la respuesta con tus palabras y una IA la corrige.</li>
+        </ul>
+      </section>
+
+      <section className="card" aria-labelledby="example-title">
         <div className="spread" style={{ marginBottom: 12 }}>
-          <h2 style={{ margin: 0 }}>Ejemplo con los 5 tipos</h2>
+          <h2 id="example-title" style={{ margin: 0 }}>Ejemplo con los cinco tipos</h2>
           <div className="row">
-            <CopyButton text={example} label="Copiar" />
-            <button className="btn" onClick={download}>Descargar</button>
+            <button className="btn small" onClick={() => copyText(example, 'Ejemplo copiado')}>Copiar</button>
+            <button className="btn small" onClick={download}>Descargar</button>
           </div>
         </div>
         <pre>{example}</pre>
-      </div>
+      </section>
     </>
   )
 }

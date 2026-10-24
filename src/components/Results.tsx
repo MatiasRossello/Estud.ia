@@ -3,6 +3,7 @@ import type { FullTest } from '../lib/types'
 import { setPlayerName, upsertSession, useStore, type Session } from '../lib/storage'
 import { api } from '../lib/supabase'
 import { cumulativeCorrect, formatDuration, pendingWrong, roundStats } from '../lib/quiz'
+import { BLANK_RE } from '../lib/parse'
 import { RoundsChart } from './Charts'
 import Leaderboard from './Leaderboard'
 
@@ -15,17 +16,24 @@ interface Props {
 
 export default function Results({ test, session, onRetryWrong, onBack }: Props) {
   const { playerName } = useStore()
+  const headingRef = useRef<HTMLHeadingElement>(null)
   const lastIdx = session.rounds.length - 1
-  const last = roundStats(session.rounds[lastIdx])
+  const lastRound = session.rounds[lastIdx]
+  const last = roundStats(lastRound)
   const first = roundStats(session.rounds[0])
   const cumulative = cumulativeCorrect(session)
   const wrong = pendingWrong(session)
   const total = session.qids.length
+  const solved = cumulative[lastIdx]
 
   const [refreshKey, setRefreshKey] = useState(0)
   const [nameInput, setNameInput] = useState('')
   const [sending, setSending] = useState(false)
   const sentRef = useRef(false)
+
+  useEffect(() => {
+    headingRef.current?.focus()
+  }, [lastIdx])
 
   async function submit(name: string) {
     if (sentRef.current) return
@@ -51,63 +59,92 @@ export default function Results({ test, session, onRetryWrong, onBack }: Props) 
   }, [eligible, playerName, session.leaderboard])
 
   const roundLabels = session.rounds.map((_, i) => (i === 0 ? '1er intento' : `Repaso ${i}`))
+  const heading = !wrong.length
+    ? lastIdx === 0
+      ? '¡Perfecto! Respondiste todo bien'
+      : '¡Listo! Ya respondiste bien todas'
+    : lastIdx === 0
+      ? `Respondiste bien ${last.correct} de ${total}`
+      : `En este repaso acertaste ${last.correct} de ${lastRound.qids.length}`
 
   return (
     <>
-      <div className="card">
-        <h1>{wrong.length ? 'Ronda terminada' : '¡Test completado! 🎉'}</h1>
+      <section className="card">
+        <p className="small muted" style={{ marginBottom: 4 }}>{test.title}</p>
+        <h1 ref={headingRef} tabIndex={-1} style={{ outline: 'none' }}>{heading}</h1>
+        {wrong.length > 0 && (
+          <p style={{ fontSize: '1.05rem' }}>
+            Te quedan <strong>{wrong.length} pregunta{wrong.length === 1 ? '' : 's'}</strong> por aprender. Repetilas
+            ahora, mientras las tenés frescas.
+          </p>
+        )}
+
+        <div className="row" style={{ margin: '18px 0 6px' }}>
+          {wrong.length > 0 && (
+            <button className="btn primary big" onClick={onRetryWrong}>
+              Repetir las {wrong.length} que fallé
+            </button>
+          )}
+          <button className={`btn big${wrong.length ? '' : ' primary'}`} onClick={onBack}>
+            Volver al test
+          </button>
+        </div>
+
         <div className="stats">
-          <div className="stat">
-            <div className="label">{lastIdx === 0 ? 'Correctas' : `Correctas en el repaso ${lastIdx}`}</div>
-            <div className="value">
-              {last.correct}/{session.rounds[lastIdx].qids.length}
-            </div>
-          </div>
-          <div className="stat">
+          <div className="stat hl">
             <div className="label">Primer intento</div>
             <div className="value">{Math.round((first.correct / total) * 100)}%</div>
           </div>
           <div className="stat">
-            <div className="label">Acumulado</div>
-            <div className="value">
-              {cumulative[lastIdx]}/{total}
-            </div>
+            <div className="label">Aprendidas</div>
+            <div className="value">{solved}/{total}</div>
           </div>
           <div className="stat">
-            <div className="label">Puntos (1er intento)</div>
+            <div className="label">Puntos del 1er intento</div>
             <div className="value">{first.points.toLocaleString('es-AR')}</div>
           </div>
           <div className="stat">
-            <div className="label">Tiempo</div>
+            <div className="label">Tiempo de esta ronda</div>
             <div className="value">{formatDuration(last.timeMs)}</div>
           </div>
         </div>
 
         {session.rounds.length > 1 && (
           <>
-            <h3>Tu progreso en esta sesión</h3>
+            <h2>Cómo fuiste mejorando</h2>
+            <p className="small muted">Preguntas que ya respondiste bien después de cada vuelta.</p>
             <RoundsChart labels={roundLabels} values={cumulative} total={total} />
           </>
         )}
 
-        <div className="row" style={{ marginTop: 18 }}>
-          {wrong.length > 0 && (
-            <button className="btn primary big" onClick={onRetryWrong} autoFocus>
-              Rehacer solo las que fallé ({wrong.length})
-            </button>
-          )}
-          <button className="btn big" onClick={onBack}>Volver al test</button>
-        </div>
-      </div>
+        <details className="disclosure" style={{ marginTop: 14 }}>
+          <summary>Ver qué respondiste en esta ronda</summary>
+          <ul className="review-list">
+            {lastRound.qids.map((id) => {
+              const a = lastRound.answers[id]
+              const q = test.questions[id]
+              return (
+                <li key={id}>
+                  <span className={`mark ${a?.correct ? 'ok' : 'no'}`} aria-hidden="true">{a?.correct ? '✓' : '✗'}</span>
+                  <span>
+                    <span className="visually-hidden">{a?.correct ? 'Correcta: ' : 'Incorrecta: '}</span>
+                    {q.consigna.replace(BLANK_RE, '___')}
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+        </details>
+      </section>
 
       {eligible && (
-        <>
+        <section aria-labelledby="ranking-entry">
           {!playerName && !session.leaderboard && (
             <div className="card stack">
-              <h2>Entrá al ranking</h2>
-              <p className="muted" style={{ margin: 0 }}>
-                Hiciste el banco completo. Elegí tu nombre para el ranking: se guarda en este navegador y se usa en
-                todos los tests.
+              <h2 id="ranking-entry">Sumate al ranking</h2>
+              <p className="muted">
+                Hiciste todas las preguntas, así que tu primer intento cuenta para el ranking. Elegí cómo querés
+                aparecer: lo vamos a recordar para la próxima.
               </p>
               <form
                 className="row"
@@ -117,38 +154,47 @@ export default function Results({ test, session, onRetryWrong, onBack }: Props) 
                   if (name) setPlayerName(name)
                 }}
               >
+                <label className="visually-hidden" htmlFor="player-name">Tu nombre para el ranking</label>
                 <input
+                  id="player-name"
                   type="text"
                   value={nameInput}
                   onChange={(e) => setNameInput(e.target.value)}
                   maxLength={40}
-                  placeholder="Tu nombre"
-                  aria-label="Tu nombre para el ranking"
-                  autoFocus
+                  placeholder="Tu nombre o apodo"
+                  autoComplete="nickname"
                 />
-                <button className="btn primary" disabled={!nameInput.trim()}>Guardar y enviar</button>
+                <button className="btn primary" disabled={!nameInput.trim()}>Entrar al ranking</button>
               </form>
             </div>
           )}
-          {sending && <div className="alert warn">Enviando tu puntaje…</div>}
+          {sending && <div className="alert info" role="status"><div className="alert-body">Enviando tu puntaje…</div></div>}
           {session.leaderboard?.status === 'error' && (
-            <div className="alert error">
-              No se pudo enviar al ranking: {session.leaderboard.error}{' '}
-              <button className="btn" onClick={() => playerName && submit(playerName)}>Reintentar</button>
+            <div className="alert error" role="alert">
+              <span className="icon" aria-hidden="true">✗</span>
+              <div className="alert-body">
+                No se pudo enviar tu puntaje: {session.leaderboard.error}
+                <div style={{ marginTop: 8 }}>
+                  <button className="btn small" onClick={() => playerName && submit(playerName)}>Intentar de nuevo</button>
+                </div>
+              </div>
             </div>
           )}
           {session.leaderboard?.status === 'sent' && (
-            <div className="alert ok">
-              Puntaje enviado como <strong>{session.leaderboard.name}</strong> (si ya tenías uno mejor, se mantiene el
-              mejor).
+            <div className="alert ok" role="status">
+              <span className="icon" aria-hidden="true">✓</span>
+              <div className="alert-body">
+                Entraste al ranking como <strong>{session.leaderboard.name}</strong>. Si antes tenías un puntaje mejor,
+                se mantiene el mejor.
+              </div>
             </div>
           )}
           <Leaderboard testId={test.id} refreshKey={refreshKey} />
-        </>
+        </section>
       )}
       {!eligible && (
-        <p className="muted small">
-          Este intento no cuenta para el ranking: solo cuentan los tests con el banco completo de preguntas.
+        <p className="small muted">
+          Este intento no suma al ranking: solo cuentan los tests con todas las preguntas del banco.
         </p>
       )}
     </>

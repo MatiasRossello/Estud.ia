@@ -3,90 +3,121 @@ import { Link } from 'react-router-dom'
 import { api } from '../lib/supabase'
 import { useAsync } from '../lib/useAsync'
 import { useStore } from '../lib/storage'
+import { useTitle } from '../lib/useTitle'
+import { copyText, toast } from '../components/Toast'
 
 export default function MyTests() {
+  useTitle('Mis tests')
   const { data, error, loading, reload } = useAsync(() => api.myTests(), [])
   const { sessions } = useStore()
   const [busy, setBusy] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
-  const [copied, setCopied] = useState<string | null>(null)
 
-  async function act(id: string, fn: () => Promise<void>) {
+  async function act(id: string, fn: () => Promise<void>, okMsg: string) {
     setBusy(id)
     setActionError(null)
     try {
       await fn()
       await reload()
+      toast(okMsg)
     } catch (e) {
-      setActionError((e as Error).message)
+      setActionError(`No se pudo completar la acción: ${(e as Error).message}`)
     } finally {
       setBusy(null)
+      setConfirming(null)
     }
-  }
-
-  function copyLink(id: string) {
-    navigator.clipboard.writeText(`${location.origin}/test/${id}`)
-    setCopied(id)
-    setTimeout(() => setCopied(null), 1500)
   }
 
   return (
     <>
-      <div className="spread">
-        <h1>Mis tests</h1>
-        <Link to="/" className="btn primary">+ Subir JSON</Link>
+      <div className="spread page-head">
+        <div>
+          <h1>Mis tests</h1>
+          <p style={{ margin: 0 }}>
+            Los tests que subiste desde este navegador. Hacelos públicos para que otros los encuentren.
+          </p>
+        </div>
+        <Link to="/subir" className="btn primary">Subir otro test</Link>
       </div>
-      <p className="muted small">
-        Tus tests quedan asociados a este navegador. Si borrás los datos del sitio, perdés la posibilidad de editarlos.
-      </p>
-      {error && <div className="alert error">{error}</div>}
-      {actionError && <div className="alert error">{actionError}</div>}
-      {loading && !data && <p className="muted">Cargando…</p>}
+
+      {error && <div className="alert error" role="alert"><span className="icon" aria-hidden="true">✗</span><div className="alert-body">No se pudieron cargar tus tests: {error}</div></div>}
+      {actionError && <div className="alert error" role="alert"><span className="icon" aria-hidden="true">✗</span><div className="alert-body">{actionError}</div></div>}
+      {loading && !data && <p className="muted" role="status">Cargando tus tests…</p>}
+
       {data && !data.length && (
-        <div className="card">
-          Todavía no subiste ningún test. <Link to="/">Subí tu primer JSON</Link>.
+        <div className="card empty">
+          <h2>Todavía no subiste ningún test</h2>
+          <p className="muted">Armá el archivo con tu IA en un minuto y subilo.</p>
+          <div className="row" style={{ justifyContent: 'center' }}>
+            <Link to="/subir" className="btn primary">Subir mi primer test</Link>
+            <Link to="/como-crear" className="btn">Cómo crear el JSON</Link>
+          </div>
         </div>
       )}
+
       <div className="grid">
         {data?.map((t) => {
           const played = sessions.filter((s) => s.testId === t.id).length
+          const isConfirming = confirming === t.id
           return (
-            <div key={t.id} className="card stack" style={{ marginBottom: 0 }}>
+            <article key={t.id} className="card test-card">
               <div className="spread">
-                <span className={`badge${t.is_public ? ' public' : ''}`}>{t.is_public ? 'Público' : 'Privado'}</span>
-                <span className="muted small">{t.question_count} preguntas</span>
+                <span className={`badge${t.is_public ? ' public' : ''}`}>
+                  {t.is_public ? '● Público' : '○ Privado'}
+                </span>
+                <span className="small muted">{t.question_count} preguntas</span>
               </div>
-              <h3 style={{ margin: 0 }}>
+              <h3>
                 <Link to={`/test/${t.id}`}>{t.title}</Link>
               </h3>
-              {t.description && <p className="muted small" style={{ margin: 0 }}>{t.description}</p>}
-              <div className="muted small">
-                {played ? `Lo hiciste ${played} ${played === 1 ? 'vez' : 'veces'}` : 'Sin intentos todavía'}
+              {t.description && <p className="desc">{t.description}</p>}
+              <div className="test-meta">
+                {played ? `Lo hiciste ${played} ${played === 1 ? 'vez' : 'veces'}` : 'Todavía no lo hiciste'}
               </div>
-              <div className="row">
-                <button
-                  className="btn"
-                  disabled={busy === t.id}
-                  onClick={() => act(t.id, () => api.setPublic(t.id, !t.is_public))}
-                >
-                  {t.is_public ? 'Hacer privado' : 'Hacer público'}
-                </button>
-                <button className="btn" onClick={() => copyLink(t.id)}>
-                  {copied === t.id ? '¡Copiado!' : 'Copiar link'}
-                </button>
-                <button
-                  className="btn danger"
-                  disabled={busy === t.id}
-                  onClick={() => {
-                    if (window.confirm(`¿Eliminar "${t.title}"? También se borra su ranking.`)) {
-                      act(t.id, () => api.deleteTest(t.id))
-                    }
-                  }}
-                >
-                  Eliminar
-                </button>
+              <div className="actions">
+                {isConfirming ? (
+                  <div role="group" aria-label={`Confirmar eliminación de ${t.title}`} className="stack">
+                    <p className="small" style={{ margin: 0 }}>
+                      <strong>¿Eliminar este test?</strong> También se borra su ranking. No se puede deshacer.
+                    </p>
+                    <div className="row">
+                      <button
+                        className="btn danger solid small"
+                        disabled={busy === t.id}
+                        onClick={() => act(t.id, () => api.deleteTest(t.id), 'Test eliminado')}
+                        autoFocus
+                      >
+                        Sí, eliminar
+                      </button>
+                      <button className="btn small" onClick={() => setConfirming(null)}>Cancelar</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="row">
+                    <button
+                      className="btn small"
+                      disabled={busy === t.id}
+                      onClick={() =>
+                        act(
+                          t.id,
+                          () => api.setPublic(t.id, !t.is_public),
+                          t.is_public ? 'El test ahora es privado' : 'El test ahora es público',
+                        )
+                      }
+                    >
+                      {t.is_public ? 'Hacer privado' : 'Hacer público'}
+                    </button>
+                    <button className="btn small" onClick={() => copyText(`${location.origin}/test/${t.id}`, 'Link copiado')}>
+                      Copiar link
+                    </button>
+                    <button className="btn small danger" onClick={() => setConfirming(t.id)} aria-label={`Eliminar ${t.title}`}>
+                      Eliminar
+                    </button>
+                  </div>
+                )}
               </div>
-            </div>
+            </article>
           )
         })}
       </div>
