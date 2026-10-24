@@ -34,14 +34,14 @@ export default function Explore() {
         <div className="card empty">
           <h2>{q ? 'No encontramos tests con esa búsqueda' : 'Todavía no hay tests públicos'}</h2>
           <p className="muted">{q ? 'Probá con otra palabra.' : 'Subí uno y hacelo público para que aparezca acá.'}</p>
-          {!q && <Link to="/subir" className="btn primary">Subir un test</Link>}
+          {!q && <Link viewTransition to="/subir" className="btn primary">Subir un test</Link>}
         </div>
       )}
       <div className="grid">
         {list.map((t) => (
           <article key={t.id} className="card test-card card-link">
             <h3>
-              <Link to={`/test/${t.id}`}>{t.title}</Link>
+              <Link viewTransition to={`/test/${t.id}`}>{t.title}</Link>
             </h3>
             {t.description && <p className="desc">{t.description}</p>}
             <div className="test-meta">

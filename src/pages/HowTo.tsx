@@ -56,7 +56,7 @@ export default function HowTo() {
             <strong>Guardá la respuesta y subila</strong>
             <span>
               Copiá lo que te devuelve en un archivo <code>.json</code>, o pegalo directo en{' '}
-              <Link to="/subir">Subir preguntas</Link>. Si algo está mal, te decimos en qué pregunta.
+              <Link viewTransition to="/subir">Subir preguntas</Link>. Si algo está mal, te decimos en qué pregunta.
             </span>
           </div>
         </li>

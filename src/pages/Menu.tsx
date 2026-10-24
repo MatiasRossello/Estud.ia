@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useStore } from '../lib/storage'
 import { isSessionDone } from '../lib/quiz'
 import { useTitle } from '../lib/useTitle'
+import HeroDemo from '../components/HeroDemo'
 
 const icon = {
   upload: <path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />,
@@ -37,12 +38,24 @@ export default function Menu() {
   return (
     <>
       <section className="menu-hero">
-        <h1>¿Qué querés hacer?</h1>
-        <p>Estudiá con tus propias preguntas: tests al azar, repaso de errores y ranking.</p>
+        <div className="menu-hero-text">
+          <h1>
+            <span className="reveal" style={{ '--i': 0 } as React.CSSProperties}>¿Qué querés</span>{' '}
+            <span className="reveal" style={{ '--i': 1 } as React.CSSProperties}>hacer?</span>
+          </h1>
+          <p className="reveal" style={{ '--i': 2 } as React.CSSProperties}>
+            Estudiá con tus propias preguntas: tests al azar, repaso de errores y ranking.
+          </p>
+        </div>
+        <HeroDemo />
+        <svg className="hero-orbit" viewBox="0 0 200 200" aria-hidden="true">
+          <circle cx="100" cy="100" r="80" />
+          <circle className="hero-orbit-dot" cx="100" cy="20" r="7" />
+        </svg>
       </section>
 
       {last && (
-        <Link to={`/test/${last.testId}`} className="menu-option resume">
+        <Link to={`/test/${last.testId}`} viewTransition className="menu-option resume enter" style={{ '--i': 0 } as React.CSSProperties}>
           <span className="menu-icon"><Icon name="resume" /></span>
           <span className="menu-text">
             <strong>{isSessionDone(last) ? 'Volver a estudiar' : 'Seguir donde lo dejé'}</strong>
@@ -53,8 +66,14 @@ export default function Menu() {
       )}
 
       <nav aria-label="Opciones" className="menu-grid">
-        {options.map((o) => (
-          <Link key={o.to} to={o.to} className={`menu-option${'main' in o && o.main ? ' main' : ''}`}>
+        {options.map((o, i) => (
+          <Link
+            key={o.to}
+            to={o.to}
+            viewTransition
+            className={`menu-option enter${'main' in o && o.main ? ' main' : ''}`}
+            style={{ '--i': i + (last ? 1 : 0) } as React.CSSProperties}
+          >
             <span className="menu-icon"><Icon name={o.icon} /></span>
             <span className="menu-text">
               <strong>{o.title}</strong>

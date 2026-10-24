@@ -65,10 +65,18 @@ export function gradeChoice(q: Question, given: unknown): number {
   if (q.tipo === 'verdadero_falso') return given === q.respuesta ? 1 : 0
   if (q.tipo === 'multiple_choice') return given === q.correctas[0] ? 1 : 0
   if (q.tipo === 'seleccion_multiple') {
+    // Crédito parcial: cada correcta marcada suma, cada incorrecta marcada resta (así marcar todo no conviene).
     const set = new Set(given as number[])
-    return set.size === q.correctas.length && q.correctas.every((c) => set.has(c)) ? 1 : 0
+    const hits = q.correctas.filter((c) => set.has(c)).length
+    const misses = set.size - hits
+    return Math.max(0, (hits - misses) / q.correctas.length)
   }
   throw new Error('gradeChoice solo corrige preguntas de opciones')
+}
+
+/** En selección múltiple solo cuenta como correcta si marcaste exactamente las correctas; el resto da puntos parciales. */
+export function isCorrect(q: Question, score: number) {
+  return q.tipo === 'seleccion_multiple' ? score === 1 : score >= CORRECT_THRESHOLD
 }
 
 export async function gradeWritten(q: Question, given: string[]) {

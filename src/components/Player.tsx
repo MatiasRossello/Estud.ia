@@ -3,7 +3,8 @@ import type { FullTest, Question } from '../lib/types'
 import { TYPE_LABELS } from '../lib/types'
 import { upsertSession, type AnswerRecord, type Session } from '../lib/storage'
 import { BLANK_RE } from '../lib/parse'
-import { CORRECT_THRESHOLD, computePoints, gradeChoice, gradeWritten, MAX_POINTS, TIME_LIMITS } from '../lib/quiz'
+import Burst from './Burst'
+import { computePoints, gradeChoice, gradeWritten, isCorrect, MAX_POINTS, TIME_LIMITS } from '../lib/quiz'
 
 type Given = number | number[] | boolean | string[] | null
 
@@ -65,11 +66,12 @@ export default function Player({ test, session, onRoundEnd, onExit }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qid])
 
+  // El reloj se detiene mientras se corrige: la espera de la IA no le resta puntos al alumno.
   useEffect(() => {
-    if (record) return
+    if (record || grading) return
     const t = setInterval(() => setElapsed(Date.now() - startRef.current), 250)
     return () => clearInterval(t)
-  }, [record, qid])
+  }, [record, grading, qid])
 
   useEffect(() => {
     if (record) feedbackRef.current?.focus()
@@ -77,7 +79,9 @@ export default function Player({ test, session, onRoundEnd, onExit }: Props) {
 
   async function submit() {
     if (!canSubmit(q, given) || grading || record) return
-    const timeMs = Date.now() - startRef.current
+    const submittedAt = Date.now()
+    const timeMs = submittedAt - startRef.current
+    setElapsed(timeMs)
     setGrading(true)
     setError(null)
     try {
@@ -89,7 +93,7 @@ export default function Player({ test, session, onRoundEnd, onExit }: Props) {
         score = gradeChoice(q, given)
       }
       const answer: AnswerRecord = {
-        correct: score >= CORRECT_THRESHOLD,
+        correct: isCorrect(q, score),
         score,
         points: computePoints(score, timeMs, q.tipo),
         timeMs,
@@ -100,6 +104,8 @@ export default function Player({ test, session, onRoundEnd, onExit }: Props) {
       rounds[roundIdx] = { ...round, answers: { ...round.answers, [qid]: answer } }
       upsertSession({ ...session, rounds })
     } catch (e) {
+      // Si falla y hay que reintentar, el tiempo que tardó la corrección tampoco cuenta.
+      startRef.current += Date.now() - submittedAt
       setError(`No se pudo corregir tu respuesta (${(e as Error).message}). Revisá tu conexión y tocá "Responder" de nuevo.`)
     } finally {
       setGrading(false)
@@ -198,7 +204,7 @@ export default function Player({ test, session, onRoundEnd, onExit }: Props) {
             )}
             {record && (
               <span className="small">
-                <span className="points">+{record.points}</span> pts
+                <span className="points pts-pop">+{record.points}</span> pts
               </span>
             )}
           </span>
@@ -207,7 +213,7 @@ export default function Player({ test, session, onRoundEnd, onExit }: Props) {
           <div style={{ width: `${Math.max(0, 1 - shownTime / limitMs) * 100}%` }} />
         </div>
 
-        <div className="ficha-body">
+        <div className="ficha-body q-enter" key={qid}>
           {q.tipo === 'completar' ? (
             <BlankText
               q={q}
@@ -234,7 +240,11 @@ export default function Player({ test, session, onRoundEnd, onExit }: Props) {
                 const isCorrect = q.correctas.includes(opt)
                 const state = record ? (isCorrect ? 'correct' : selected ? 'wrong' : '') : ''
                 return (
-                  <label key={opt} className={`option${multi ? ' multi' : ''} ${state}${record ? ' locked' : ''}`}>
+                  <label
+                    key={opt}
+                    className={`option${multi ? ' multi' : ''} ${state}${record ? ' locked' : ''}`}
+                    style={{ '--i': i } as React.CSSProperties}
+                  >
                     <input
                       type={multi ? 'checkbox' : 'radio'}
                       name={`q-${qid}`}
@@ -264,7 +274,7 @@ export default function Player({ test, session, onRoundEnd, onExit }: Props) {
                 const selected = shown === v
                 const state = record ? (v === q.respuesta ? 'correct' : selected ? 'wrong' : '') : ''
                 return (
-                  <label key={String(v)} className={`option ${state}${record ? ' locked' : ''}`}>
+                  <label key={String(v)} className={`option ${state}${record ? ' locked' : ''}`} style={{ '--i': i } as React.CSSProperties}>
                     <input
                       type="radio"
                       name={`q-${qid}`}
@@ -392,8 +402,24 @@ function Feedback({
   const title = record.correct ? '✓ ¡Correcto!' : record.score > 0 ? '≈ Casi' : '✗ Incorrecto'
   return (
     <div className={`feedback ${kind}`} ref={feedbackRef} tabIndex={-1} role="status">
-      <div className="title">{title}</div>
+      <div className="title">
+        <span className="title-text">{title}</span>
+        {record.correct && <Burst />}
+        <span className="float-pts" aria-hidden="true">+{record.points}</span>
+      </div>
       {written && <p className="small">La IA evaluó tu respuesta con un {Math.round(record.score * 100)}%.</p>}
+      {q.tipo === 'seleccion_multiple' && !record.correct && (() => {
+        const picked = (record.given as number[]) ?? []
+        const hits = picked.filter((c) => q.correctas.includes(c)).length
+        const misses = picked.length - hits
+        return (
+          <p className="small">
+            Marcaste {hits} de {q.correctas.length} correctas
+            {misses > 0 && ` y ${misses} incorrecta${misses === 1 ? '' : 's'} (cada una descuenta)`}: sumás el{' '}
+            {Math.round(record.score * 100)}% de los puntos.
+          </p>
+        )
+      })()}
       {record.feedback && <p>{record.feedback}</p>}
       {q.tipo === 'verdadero_falso' && !record.correct && (
         <p>La respuesta correcta es <strong>{q.respuesta ? 'Verdadero' : 'Falso'}</strong>.</p>

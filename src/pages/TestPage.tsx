@@ -60,7 +60,7 @@ export default function TestPage() {
       <div className="card empty">
         <h1>No encontramos este test</h1>
         <p className="muted">Puede que lo hayan borrado o que sea privado.</p>
-        <Link to="/explorar" className="btn primary">Ver tests públicos</Link>
+        <Link viewTransition to="/explorar" className="btn primary">Ver tests públicos</Link>
       </div>
     )
 
@@ -129,7 +129,7 @@ export default function TestPage() {
 
       {!test.is_public && test.is_owner && (
         <p className="small muted">
-          Solo vos ves este test. Para compartirlo, hacelo público en <Link to="/mis-tests">Mis tests</Link>.
+          Solo vos ves este test. Para compartirlo, hacelo público en <Link viewTransition to="/mis-tests">Mis tests</Link>.
         </p>
       )}
 

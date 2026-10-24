@@ -6,6 +6,38 @@ import { cumulativeCorrect, formatDuration, pendingWrong, roundStats } from '../
 import { BLANK_RE } from '../lib/parse'
 import { RoundsChart } from './Charts'
 import Leaderboard from './Leaderboard'
+import Burst from './Burst'
+import { useCountUp } from '../lib/motion'
+
+function ScoreRing({ value, total }: { value: number; total: number }) {
+  const pct = total ? value / total : 0
+  const shown = useCountUp(Math.round(pct * 100))
+  const C = 2 * Math.PI * 52
+  return (
+    <div className="score-ring" role="img" aria-label={`${Math.round(pct * 100)}% aprendido`}>
+      <svg viewBox="0 0 120 120" aria-hidden="true">
+        <circle className="track" cx="60" cy="60" r="52" />
+        <circle className="fill" cx="60" cy="60" r="52" strokeDasharray={C} style={{ '--off': C * (1 - pct), '--c': C } as React.CSSProperties} />
+      </svg>
+      <span className="ring-value" aria-hidden="true">{shown}%</span>
+    </div>
+  )
+}
+
+function CountStat({ label, value, format = (n: number) => n.toLocaleString('es-AR'), hl = false }: {
+  label: string
+  value: number
+  format?: (n: number) => string
+  hl?: boolean
+}) {
+  const shown = useCountUp(value)
+  return (
+    <div className={`stat${hl ? ' hl' : ''}`}>
+      <div className="label">{label}</div>
+      <div className="value">{format(shown)}</div>
+    </div>
+  )
+}
 
 interface Props {
   test: FullTest
@@ -69,15 +101,21 @@ export default function Results({ test, session, onRetryWrong, onBack }: Props) 
 
   return (
     <>
-      <section className="card">
-        <p className="small muted" style={{ marginBottom: 4 }}>{test.title}</p>
-        <h1 ref={headingRef} tabIndex={-1} style={{ outline: 'none' }}>{heading}</h1>
-        {wrong.length > 0 && (
-          <p style={{ fontSize: '1.05rem' }}>
-            Te quedan <strong>{wrong.length} pregunta{wrong.length === 1 ? '' : 's'}</strong> por aprender. Repetilas
-            ahora, mientras las tenés frescas.
-          </p>
-        )}
+      <section className="card results-card">
+        {!wrong.length && <Burst big />}
+        <div className="results-head">
+          <ScoreRing value={solved} total={total} />
+          <div>
+            <p className="small muted" style={{ marginBottom: 4 }}>{test.title}</p>
+            <h1 ref={headingRef} tabIndex={-1} style={{ outline: 'none' }}>{heading}</h1>
+            {wrong.length > 0 && (
+              <p style={{ fontSize: '1.05rem', marginBottom: 0 }}>
+                Te quedan <strong>{wrong.length} pregunta{wrong.length === 1 ? '' : 's'}</strong> por aprender.
+                Repetilas ahora, mientras las tenés frescas.
+              </p>
+            )}
+          </div>
+        </div>
 
         <div className="row" style={{ margin: '18px 0 6px' }}>
           {wrong.length > 0 && (
@@ -91,22 +129,10 @@ export default function Results({ test, session, onRetryWrong, onBack }: Props) 
         </div>
 
         <div className="stats">
-          <div className="stat hl">
-            <div className="label">Primer intento</div>
-            <div className="value">{Math.round((first.correct / total) * 100)}%</div>
-          </div>
-          <div className="stat">
-            <div className="label">Aprendidas</div>
-            <div className="value">{solved}/{total}</div>
-          </div>
-          <div className="stat">
-            <div className="label">Puntos del 1er intento</div>
-            <div className="value">{first.points.toLocaleString('es-AR')}</div>
-          </div>
-          <div className="stat">
-            <div className="label">Tiempo de esta ronda</div>
-            <div className="value">{formatDuration(last.timeMs)}</div>
-          </div>
+          <CountStat hl label="Primer intento" value={Math.round((first.correct / total) * 100)} format={(n) => `${n}%`} />
+          <CountStat label="Aprendidas" value={solved} format={(n) => `${n}/${total}`} />
+          <CountStat label="Puntos del 1er intento" value={first.points} />
+          <CountStat label="Tiempo de esta ronda" value={last.timeMs} format={formatDuration} />
         </div>
 
         {session.rounds.length > 1 && (

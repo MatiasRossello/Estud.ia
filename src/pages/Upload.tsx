@@ -78,7 +78,7 @@ export default function Upload() {
           <div>
             <strong>Armá el archivo con tu IA</strong>
             <span>
-              <Link to="/como-crear">Copiá nuestro prompt</Link> y pegalo en ChatGPT, Gemini o Claude con tus apuntes.
+              <Link viewTransition to="/como-crear">Copiá nuestro prompt</Link> y pegalo en ChatGPT, Gemini o Claude con tus apuntes.
             </span>
           </div>
         </li>

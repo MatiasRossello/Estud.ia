@@ -38,7 +38,7 @@ export default function MyTests() {
             Los tests que subiste desde este navegador. Hacelos públicos para que otros los encuentren.
           </p>
         </div>
-        <Link to="/subir" className="btn primary">Subir otro test</Link>
+        <Link viewTransition to="/subir" className="btn primary">Subir otro test</Link>
       </div>
 
       {error && <div className="alert error" role="alert"><span className="icon" aria-hidden="true">✗</span><div className="alert-body">No se pudieron cargar tus tests: {error}</div></div>}
@@ -50,8 +50,8 @@ export default function MyTests() {
           <h2>Todavía no subiste ningún test</h2>
           <p className="muted">Armá el archivo con tu IA en un minuto y subilo.</p>
           <div className="row" style={{ justifyContent: 'center' }}>
-            <Link to="/subir" className="btn primary">Subir mi primer test</Link>
-            <Link to="/como-crear" className="btn">Cómo crear el JSON</Link>
+            <Link viewTransition to="/subir" className="btn primary">Subir mi primer test</Link>
+            <Link viewTransition to="/como-crear" className="btn">Cómo crear el JSON</Link>
           </div>
         </div>
       )}
@@ -69,7 +69,7 @@ export default function MyTests() {
                 <span className="small muted">{t.question_count} preguntas</span>
               </div>
               <h3>
-                <Link to={`/test/${t.id}`}>{t.title}</Link>
+                <Link viewTransition to={`/test/${t.id}`}>{t.title}</Link>
               </h3>
               {t.description && <p className="desc">{t.description}</p>}
               <div className="test-meta">

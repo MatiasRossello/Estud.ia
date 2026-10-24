@@ -37,20 +37,20 @@ export default function App() {
       <a href="#contenido" className="skip-link">Saltar al contenido</a>
       <header className="nav">
         <div className="nav-inner">
-          <Link to="/" className="brand" aria-label="estud.ia, volver al menú">
+          <Link to="/" viewTransition className="brand" aria-label="estud.ia, volver al menú">
             estud<span>.ia</span>
           </Link>
           {!isMenu && (
             <nav aria-label="Principal">
               <ul className="nav-links">
                 <li>
-                  <Link to="/" className="link menu-link">
+                  <Link to="/" viewTransition className="link menu-link">
                     <span aria-hidden="true">‹ </span>Menú
                   </Link>
                 </li>
                 {links.map((l) => (
                   <li key={l.to}>
-                    <NavLink to={l.to} className="link">
+                    <NavLink to={l.to} viewTransition className="link">
                       {l.label}
                     </NavLink>
                   </li>
