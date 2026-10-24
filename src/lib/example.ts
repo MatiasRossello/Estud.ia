@@ -30,6 +30,20 @@ export const EXAMPLE_JSON = {
       consigna: '¿Quién creó la bandera argentina?',
       respuestas: ['Manuel Belgrano', 'Belgrano'],
     },
+    {
+      tipo: 'unir',
+      consigna: 'Uní cada hecho con su año.',
+      pares: [
+        ['Primera invasión inglesa', '1806'],
+        ['Revolución de Mayo', '1810'],
+        ['Declaración de la Independencia', '1816'],
+      ],
+    },
+    {
+      tipo: 'ordenar',
+      consigna: 'Ordená los hechos del más antiguo al más reciente.',
+      pasos: ['Invasiones inglesas', 'Revolución de Mayo', 'Asamblea del Año XIII', 'Congreso de Tucumán'],
+    },
   ],
 }
 
@@ -62,6 +76,14 @@ Cada pregunta tiene "tipo", "consigna" y, opcionalmente, "explicacion" (se muest
 
 5. "texto": el alumno escribe la respuesta libremente (la corrige una IA comparándola con las respuestas correctas).
    { "tipo": "texto", "consigna": "...", "respuestas": ["Respuesta modelo", "Otra forma válida"] }
+
+6. "unir": el alumno une con flechas cada elemento de la izquierda con su pareja de la derecha (de 2 a 10 pares).
+   { "tipo": "unir", "consigna": "Uní cada país con su capital.", "pares": [["Francia", "París"], ["Italia", "Roma"], ["Japón", "Tokio"]] }
+   Cada par es ["izquierda", "derecha"] y está correcto así: la página mezcla la columna derecha sola.
+
+7. "ordenar": el alumno ordena pasos o hechos (de 2 a 12).
+   { "tipo": "ordenar", "consigna": "Ordená las etapas de la mitosis.", "pasos": ["Profase", "Metafase", "Anafase", "Telofase"] }
+   Escribí los "pasos" en el orden CORRECTO: la página los desordena sola.
 
 Reglas:
 - Usá comillas dobles, sin comas finales y sin comentarios: tiene que ser JSON válido.

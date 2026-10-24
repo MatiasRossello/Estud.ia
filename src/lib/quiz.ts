@@ -8,6 +8,8 @@ export const TIME_LIMITS: Record<QuestionType, number> = {
   seleccion_multiple: 30,
   completar: 40,
   texto: 60,
+  unir: 45,
+  ordenar: 45,
 }
 export const MAX_POINTS = 1000
 /** Una respuesta escrita cuenta como correcta desde este puntaje de la IA. */
@@ -28,6 +30,30 @@ export function computePoints(score: number, timeMs: number, tipo: QuestionType)
   return Math.round(score * MAX_POINTS * (1 - ratio / 2))
 }
 
+/** Mezcla 0..n-1 asegurando que no quede en el orden original (si no, la pregunta se responde sola). */
+function shuffledNotIdentity(n: number) {
+  const ids = Array.from({ length: n }, (_, i) => i)
+  let order = shuffle(ids)
+  for (let tries = 0; n > 1 && order.every((v, i) => v === i) && tries < 10; tries++) order = shuffle(ids)
+  return order
+}
+
+/** Largo de la subsecuencia creciente más larga: cuántos pasos ya están en orden entre sí. */
+function longestIncreasing(seq: number[]) {
+  const tails: number[] = []
+  for (const x of seq) {
+    let lo = 0
+    let hi = tails.length
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if (tails[mid] < x) lo = mid + 1
+      else hi = mid
+    }
+    tails[lo] = x
+  }
+  return tails.length
+}
+
 export function newRound(qids: number[], byId: Map<number, Question>): Round {
   const order = shuffle(qids)
   const optionOrders: Record<number, number[]> = {}
@@ -35,6 +61,10 @@ export function newRound(qids: number[], byId: Map<number, Question>): Round {
     const q = byId.get(id)!
     if (q.tipo === 'multiple_choice' || q.tipo === 'seleccion_multiple') {
       optionOrders[id] = shuffle(q.opciones.map((_, i) => i))
+    } else if (q.tipo === 'unir') {
+      optionOrders[id] = shuffledNotIdentity(q.pares.length)
+    } else if (q.tipo === 'ordenar') {
+      optionOrders[id] = shuffledNotIdentity(q.pasos.length)
     }
   }
   return { qids: order, optionOrders, answers: {}, startedAt: Date.now() }
@@ -89,12 +119,26 @@ export function gradeChoice(q: Question, given: unknown): number {
     const misses = set.size - hits
     return Math.max(0, (hits - misses) / q.correctas.length)
   }
+  if (q.tipo === 'unir') {
+    // given[i] = índice del par cuya derecha se unió con la izquierda i. Se compara por texto por si hay derechas repetidas.
+    const links = given as number[]
+    const hits = q.pares.filter((p, i) => links[i] >= 0 && q.pares[links[i]]?.[1] === p[1]).length
+    return hits / q.pares.length
+  }
+  if (q.tipo === 'ordenar') {
+    // Crédito parcial por los pasos que quedaron en orden relativo correcto (mover uno fuera de lugar resta poco).
+    const order = given as number[]
+    const n = q.pasos.length
+    return order.every((v, i) => v === i) ? 1 : Math.max(0, (longestIncreasing(order) - 1) / (n - 1))
+  }
   throw new Error('gradeChoice solo corrige preguntas de opciones')
 }
 
-/** En selección múltiple solo cuenta como correcta si marcaste exactamente las correctas; el resto da puntos parciales. */
+/** Selección múltiple, unir y ordenar solo cuentan como correctas si están perfectas; lo demás da puntos parciales. */
 export function isCorrect(q: Question, score: number) {
-  return q.tipo === 'seleccion_multiple' ? score === 1 : score >= CORRECT_THRESHOLD
+  return q.tipo === 'seleccion_multiple' || q.tipo === 'unir' || q.tipo === 'ordenar'
+    ? score === 1
+    : score >= CORRECT_THRESHOLD
 }
 
 export async function gradeWritten(q: Question, given: string[]) {

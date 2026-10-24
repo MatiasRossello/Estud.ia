@@ -28,6 +28,10 @@ function answerSummary(q: Question) {
       return q.respuestas.map((r) => r[0]).join(', ')
     case 'texto':
       return q.respuestas[0]
+    case 'unir':
+      return q.pares.map(([l, r]) => `${l} → ${r}`).join(' · ')
+    case 'ordenar':
+      return q.pasos.join(' → ')
   }
 }
 

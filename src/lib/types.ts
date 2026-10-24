@@ -1,4 +1,11 @@
-export type QuestionType = 'multiple_choice' | 'seleccion_multiple' | 'verdadero_falso' | 'completar' | 'texto'
+export type QuestionType =
+  | 'multiple_choice'
+  | 'seleccion_multiple'
+  | 'verdadero_falso'
+  | 'completar'
+  | 'texto'
+  | 'unir'
+  | 'ordenar'
 
 interface Base {
   /** Identificador estable: no cambia aunque se borren o agreguen otras preguntas. */
@@ -13,6 +20,10 @@ export type Question =
   /** Una lista de respuestas válidas por cada hueco `___` de la consigna. */
   | (Base & { tipo: 'completar'; respuestas: string[][] })
   | (Base & { tipo: 'texto'; respuestas: string[] })
+  /** Cada par es [izquierda, derecha]; en el juego la columna derecha se mezcla. */
+  | (Base & { tipo: 'unir'; pares: [string, string][] })
+  /** Los pasos en el orden correcto; en el juego se muestran desordenados. */
+  | (Base & { tipo: 'ordenar'; pasos: string[] })
 
 export interface TestSummary {
   id: string
@@ -57,4 +68,6 @@ export const TYPE_LABELS: Record<QuestionType, string> = {
   verdadero_falso: 'Verdadero o falso',
   completar: 'Completar',
   texto: 'Respuesta escrita',
+  unir: 'Unir con flechas',
+  ordenar: 'Ordenar los pasos',
 }

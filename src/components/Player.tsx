@@ -4,12 +4,16 @@ import { TYPE_LABELS } from '../lib/types'
 import { upsertSession, type AnswerRecord, type Session } from '../lib/storage'
 import { BLANK_RE } from '../lib/parse'
 import Burst from './Burst'
+import MatchQuestion from './MatchQuestion'
+import OrderQuestion from './OrderQuestion'
 import { computePoints, gradeChoice, gradeWritten, isCorrect, MAX_POINTS, TIME_LIMITS } from '../lib/quiz'
 
 type Given = number | number[] | boolean | string[] | null
 
-function emptyGiven(q: Question): Given {
+function emptyGiven(q: Question, order: number[] | undefined): Given {
   if (q.tipo === 'seleccion_multiple') return []
+  if (q.tipo === 'unir') return q.pares.map(() => -1)
+  if (q.tipo === 'ordenar') return order ?? q.pasos.map((_, i) => i)
   if (q.tipo === 'completar') return q.respuestas.map(() => '')
   if (q.tipo === 'texto') return ['']
   return null
@@ -18,6 +22,8 @@ function emptyGiven(q: Question): Given {
 function canSubmit(q: Question, g: Given) {
   if (q.tipo === 'multiple_choice' || q.tipo === 'verdadero_falso') return g !== null
   if (q.tipo === 'seleccion_multiple') return Array.isArray(g) && g.length > 0
+  if (q.tipo === 'unir') return Array.isArray(g) && (g as number[]).every((r) => r >= 0)
+  if (q.tipo === 'ordenar') return Array.isArray(g)
   return Array.isArray(g) && (g as string[]).some((s) => s.trim())
 }
 
@@ -27,6 +33,8 @@ const INSTRUCTIONS: Record<Question['tipo'], string> = {
   verdadero_falso: 'Elegí verdadero o falso.',
   completar: 'Escribí la palabra que falta en cada hueco.',
   texto: 'Escribí tu respuesta con tus palabras.',
+  unir: 'Uní cada elemento de la izquierda con su pareja de la derecha.',
+  ordenar: 'Poné los pasos en el orden correcto.',
 }
 
 interface Props {
@@ -47,8 +55,8 @@ export default function Player({ test, session, onRoundEnd, onExit }: Props) {
   const optionOrder = round.optionOrders[qid]
 
   // La respuesta en curso va atada a su pregunta: al cambiar de pregunta nunca se lee la de la anterior.
-  const [draft, setDraft] = useState<{ qid: number; value: Given }>(() => ({ qid, value: emptyGiven(q) }))
-  const given = draft.qid === qid ? draft.value : emptyGiven(q)
+  const [draft, setDraft] = useState<{ qid: number; value: Given }>(() => ({ qid, value: emptyGiven(q, optionOrder) }))
+  const given = draft.qid === qid ? draft.value : emptyGiven(q, optionOrder)
   const setGiven = (value: Given) => setDraft({ qid, value })
   const [grading, setGrading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -295,6 +303,20 @@ export default function Player({ test, session, onRoundEnd, onExit }: Props) {
             </fieldset>
           )}
 
+          {q.tipo === 'unir' && (
+            <MatchQuestion
+              q={q}
+              rightOrder={optionOrder}
+              value={shown as number[]}
+              onChange={setGiven}
+              locked={!!record}
+            />
+          )}
+
+          {q.tipo === 'ordenar' && (
+            <OrderQuestion q={q} value={shown as number[]} onChange={setGiven} locked={!!record} />
+          )}
+
           {q.tipo === 'texto' && (
             <>
               <label htmlFor={`ans-${qid}`} className="visually-hidden">Tu respuesta</label>
@@ -420,6 +442,30 @@ function Feedback({
           </p>
         )
       })()}
+      {q.tipo === 'unir' && !record.correct && (
+        <>
+          <p className="small">
+            Uniste bien {Math.round(record.score * q.pares.length)} de {q.pares.length}: sumás el {Math.round(record.score * 100)}% de los puntos.
+          </p>
+          <p>Las parejas correctas eran:</p>
+          <ul className="pair-list">
+            {q.pares.map(([l, r], i) => (
+              <li key={i}><strong>{l}</strong> <span aria-hidden="true">→</span><span className="visually-hidden">con</span> {r}</li>
+            ))}
+          </ul>
+        </>
+      )}
+      {q.tipo === 'ordenar' && !record.correct && (
+        <>
+          <p className="small">
+            Algunos pasos quedaron fuera de lugar: sumás el {Math.round(record.score * 100)}% de los puntos.
+          </p>
+          <p>El orden correcto era:</p>
+          <ol className="pair-list">
+            {q.pasos.map((p, i) => <li key={i}>{p}</li>)}
+          </ol>
+        </>
+      )}
       {record.feedback && <p>{record.feedback}</p>}
       {q.tipo === 'verdadero_falso' && !record.correct && (
         <p>La respuesta correcta es <strong>{q.respuesta ? 'Verdadero' : 'Falso'}</strong>.</p>

@@ -21,6 +21,16 @@ const TYPE_ALIASES: Record<string, QuestionType> = {
   escribir: 'texto',
   respuesta_escrita: 'texto',
   abierta: 'texto',
+  unir: 'unir',
+  unir_con_flechas: 'unir',
+  relacionar: 'unir',
+  emparejar: 'unir',
+  matching: 'unir',
+  ordenar: 'ordenar',
+  ordenar_pasos: 'ordenar',
+  ordenar_los_pasos: 'ordenar',
+  secuencia: 'ordenar',
+  ordering: 'ordenar',
 }
 
 export interface ParsedTest {
@@ -84,6 +94,25 @@ export function parseQuestion(raw: Raw, n: number, id = n - 1): Question {
     const respuesta = parseBool(raw.respuesta ?? raw.correcta ?? raw.respuestas)
     if (respuesta === null) throw new Error(`${where}: "respuesta" debe ser true o false`)
     return { id, tipo, consigna, respuesta, explicacion }
+  }
+
+  if (tipo === 'unir') {
+    const list = Array.isArray(raw.pares) ? raw.pares : []
+    const pares = list.map((p, i): [string, string] => {
+      const pair = Array.isArray(p) ? [str(p[0]), str(p[1])] : [str((p as Raw)?.izquierda), str((p as Raw)?.derecha)]
+      if (!pair[0] || !pair[1]) throw new Error(`${where}: el par ${i + 1} tiene que tener "izquierda" y "derecha"`)
+      return pair as [string, string]
+    })
+    if (pares.length < 2) throw new Error(`${where}: "unir" necesita al menos 2 "pares"`)
+    if (pares.length > 10) throw new Error(`${where}: "unir" admite hasta 10 pares`)
+    return { id, tipo, consigna, pares, explicacion }
+  }
+
+  if (tipo === 'ordenar') {
+    const pasos = strList(raw.pasos ?? raw.orden ?? raw.respuestas)
+    if (pasos.length < 2) throw new Error(`${where}: "ordenar" necesita al menos 2 "pasos"`)
+    if (pasos.length > 12) throw new Error(`${where}: "ordenar" admite hasta 12 pasos`)
+    return { id, tipo, consigna, pasos, explicacion }
   }
 
   const rawAnswers = raw.respuestas ?? raw.respuesta ?? raw.correctas

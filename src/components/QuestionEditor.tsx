@@ -31,6 +31,8 @@ export default function QuestionEditor({ question, number, onSave, onCancel }: P
         ? [question.respuestas.join(SEP)]
         : [],
   )
+  const [pares, setPares] = useState<[string, string][]>(question.tipo === 'unir' ? question.pares : [])
+  const [pasos, setPasos] = useState<string[]>(question.tipo === 'ordenar' ? question.pasos : [])
   const [error, setError] = useState<string | null>(null)
   const tipo = question.tipo
   const isChoice = tipo === 'multiple_choice' || tipo === 'seleccion_multiple'
@@ -55,6 +57,14 @@ export default function QuestionEditor({ question, number, onSave, onCancel }: P
       if (opciones.some((o) => !o.trim())) return setError('Hay opciones vacías: completalas o quitalas.')
     }
     if (tipo === 'verdadero_falso') raw.respuesta = respuesta
+    if (tipo === 'unir') {
+      if (pares.some(([l, r]) => !l.trim() || !r.trim())) return setError('Hay parejas incompletas: completalas o quitalas.')
+      raw.pares = pares
+    }
+    if (tipo === 'ordenar') {
+      if (pasos.some((p) => !p.trim())) return setError('Hay pasos vacíos: completalos o quitalos.')
+      raw.pasos = pasos
+    }
     if (tipo === 'texto') raw.respuestas = splitAlts(respuestas[0] ?? '')
     if (tipo === 'completar') {
       raw.respuestas = Array.from({ length: blanks }, (_, i) => splitAlts(respuestas[i] ?? ''))
@@ -158,6 +168,99 @@ export default function QuestionEditor({ question, number, onSave, onCancel }: P
             {i === 0 && <span className="hint">Separá las variantes con "/", por ejemplo: París / Paris</span>}
           </label>
         ))}
+
+      {tipo === 'unir' && (
+        <fieldset>
+          <legend className="small" style={{ fontWeight: 700 }}>Parejas (izquierda → derecha)</legend>
+          <div className="stack">
+            {pares.map(([l, r], i) => (
+              <div key={i} className="opt-row">
+                <input
+                  type="text"
+                  value={l}
+                  aria-label={`Pareja ${i + 1}, izquierda`}
+                  onChange={(e) => setPares(pares.map((p, k) => (k === i ? [e.target.value, p[1]] : p)))}
+                />
+                <span aria-hidden="true">→</span>
+                <input
+                  type="text"
+                  value={r}
+                  aria-label={`Pareja ${i + 1}, derecha`}
+                  onChange={(e) => setPares(pares.map((p, k) => (k === i ? [p[0], e.target.value] : p)))}
+                />
+                <button
+                  type="button"
+                  className="btn ghost small"
+                  onClick={() => setPares(pares.filter((_, k) => k !== i))}
+                  disabled={pares.length <= 2}
+                  aria-label={`Quitar la pareja ${i + 1}`}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="btn small"
+            style={{ marginTop: 10 }}
+            onClick={() => setPares([...pares, ['', '']])}
+            disabled={pares.length >= 10}
+          >
+            + Agregar pareja
+          </button>
+        </fieldset>
+      )}
+
+      {tipo === 'ordenar' && (
+        <fieldset>
+          <legend className="small" style={{ fontWeight: 700 }}>Pasos, en el orden correcto</legend>
+          <div className="stack">
+            {pasos.map((p, i) => (
+              <div key={i} className="opt-row">
+                <span className="q-num" aria-hidden="true">{i + 1}</span>
+                <input
+                  type="text"
+                  value={p}
+                  aria-label={`Paso ${i + 1}`}
+                  onChange={(e) => setPasos(pasos.map((x, k) => (k === i ? e.target.value : x)))}
+                />
+                <button
+                  type="button"
+                  className="btn ghost small"
+                  disabled={i === 0}
+                  aria-label={`Subir el paso ${i + 1}`}
+                  onClick={() => {
+                    const next = [...pasos]
+                    ;[next[i - 1], next[i]] = [next[i], next[i - 1]]
+                    setPasos(next)
+                  }}
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  className="btn ghost small"
+                  onClick={() => setPasos(pasos.filter((_, k) => k !== i))}
+                  disabled={pasos.length <= 2}
+                  aria-label={`Quitar el paso ${i + 1}`}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="btn small"
+            style={{ marginTop: 10 }}
+            onClick={() => setPasos([...pasos, ''])}
+            disabled={pasos.length >= 12}
+          >
+            + Agregar paso
+          </button>
+        </fieldset>
+      )}
 
       <label className="field">
         Explicación <span className="hint">(opcional, se muestra después de responder)</span>

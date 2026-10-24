@@ -70,12 +70,14 @@ export default function HowTo() {
           <li><strong>{TYPE_LABELS.verdadero_falso}</strong>: una afirmación para decir si es cierta.</li>
           <li><strong>{TYPE_LABELS.completar}</strong>: una frase con huecos <code>___</code> para escribir la palabra.</li>
           <li><strong>{TYPE_LABELS.texto}</strong>: escribís la respuesta con tus palabras y una IA la corrige.</li>
+          <li><strong>{TYPE_LABELS.unir}</strong>: unís cada elemento de una columna con su pareja de la otra.</li>
+          <li><strong>{TYPE_LABELS.ordenar}</strong>: ponés pasos o hechos en el orden correcto.</li>
         </ul>
       </section>
 
       <section className="card" aria-labelledby="example-title">
         <div className="spread" style={{ marginBottom: 12 }}>
-          <h2 id="example-title" style={{ margin: 0 }}>Ejemplo con los cinco tipos</h2>
+          <h2 id="example-title" style={{ margin: 0 }}>Ejemplo con los siete tipos</h2>
           <div className="row">
             <button className="btn small" onClick={() => copyText(example, 'Ejemplo copiado')}>Copiar</button>
             <button className="btn small" onClick={download}>Descargar</button>
